@@ -42,7 +42,34 @@ function trouverPersonnel(PDO $pdo, int $id): ?array
 {
     $requete = $pdo->prepare('SELECT * FROM personnel WHERE id = :id');
     $requete->execute(['id' => $id]);
-    return $requete->fetch() ?: null;
+    $personnel = $requete->fetch();
+
+    if (!$personnel) {
+        return null;
+    }
+
+    // Charger les rôles titulaires
+    $reqRoles = $pdo->prepare('
+        SELECT r.code 
+        FROM role r 
+        JOIN personnel_role pr ON pr.role_id = r.id 
+        WHERE pr.personnel_id = :id
+    ');
+    $reqRoles->execute(['id' => $id]);
+    $personnel['roles_titulaires'] = $reqRoles->fetchAll(PDO::FETCH_COLUMN);
+
+    // Charger toutes les permissions associées à ses rôles
+    $reqPerms = $pdo->prepare('
+        SELECT DISTINCT p.code 
+        FROM permission p 
+        JOIN role_permission rp ON rp.permission_id = p.id 
+        JOIN personnel_role pr ON pr.role_id = rp.role_id 
+        WHERE pr.personnel_id = :id
+    ');
+    $reqPerms->execute(['id' => $id]);
+    $personnel['permissions'] = $reqPerms->fetchAll(PDO::FETCH_COLUMN);
+
+    return $personnel;
 }
 
 /**
@@ -147,4 +174,38 @@ function remplacerRoles(PDO $pdo, int $id, array $roleIds): void
     foreach ($roleIds as $roleId) {
         $insertion->execute(['id' => $id, 'role' => $roleId]);
     }
+}
+
+function trouverPersonnelParIdentifiant(PDO $pdo, string $identifiant): ?array
+{
+    $requete = $pdo->prepare('SELECT * FROM personnel WHERE identifiant_scientifique = :id LIMIT 1');
+    $requete->execute(['id' => $identifiant]);
+    $personnel = $requete->fetch();
+
+    if (!$personnel) {
+        return null;
+    }
+
+    // Récupérer les codes des rôles propres (titulaires)
+    $reqRoles = $pdo->prepare('
+        SELECT r.code 
+        FROM role r 
+        JOIN personnel_role pr ON pr.role_id = r.id 
+        WHERE pr.personnel_id = :id
+    ');
+    $reqRoles->execute(['id' => $personnel['id']]);
+    $personnel['roles_titulaires'] = $reqRoles->fetchAll(PDO::FETCH_COLUMN);
+
+    // Récupérer toutes les permissions associées à ses rôles
+    $reqPerms = $pdo->prepare('
+        SELECT DISTINCT p.code 
+        FROM permission p 
+        JOIN role_permission rp ON rp.permission_id = p.id 
+        JOIN personnel_role pr ON pr.role_id = rp.role_id 
+        WHERE pr.personnel_id = :id
+    ');
+    $reqPerms->execute(['id' => $personnel['id']]);
+    $personnel['permissions'] = $reqPerms->fetchAll(PDO::FETCH_COLUMN);
+
+    return $personnel;
 }

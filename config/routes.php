@@ -33,5 +33,6 @@ return [
     'delegation-revoquer'  => ['droits', 'annulerDelegation', 'connecte'],
     'grille'               => ['droits', 'pageGrille', 'titulaire:ADMIN_FONCTIONNEL'],
 
-    'campagnes'            => ['campagne', 'pageCampagnes', 'CAMPAGNE_CREATE'],
+    'campagnes' => ['campagne', 'pageCampagnes', 'titulaire:ADMIN_FONCTIONNEL'],
+    'creer-campagne'        => ['campagne', 'creer', 'admin_fonctionnel'],
 ];

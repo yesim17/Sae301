@@ -30,7 +30,7 @@ INSERT INTO permission (code, libelle) VALUES
 
 
 --changeset yessim17:insert-donnees-dynamiques
--- Insertion "dynamique" : On utilise des SELECT pour récupérer automatiquement les ID (SERIAL) générés à l'étape précédente.
+-- Insertion "dynamique" : On utilise des SELECT pour récupérer automatiquement les ID générés.
 
 -- 1. Lier le rôle PERSONNEL à la permission ACTIVITE_CREATE
 INSERT INTO role_permission (role_id, permission_id)
@@ -44,13 +44,19 @@ SELECT r.id, p.id
 FROM role r, permission p 
 WHERE r.code = 'ADMIN_FONCTIONNEL';
 
--- 3. Créer un personnel de test (toi) affecté automatiquement à l'IUT
+-- 3. Lier le rôle RESPONSABLE_RH aux permissions de gestion (PROFIL_DISABLE, ACTIVITE_VALIDATE)
+INSERT INTO role_permission (role_id, permission_id)
+SELECT r.id, p.id 
+FROM role r, permission p 
+WHERE r.code = 'RESPONSABLE_RH' AND p.code IN ('PROFIL_DISABLE', 'ACTIVITE_VALIDATE');
+
+-- 4. Créer un personnel de test (toi) affecté automatiquement à l'IUT
 INSERT INTO personnel (nom, prenom, statut, identifiant_scientifique, structure_id)
 SELECT 'Sehil', 'Yesim', 'Etudiant/Dev', 'YSEHIL2026', id
 FROM structure 
 WHERE code = 'IUT';
 
--- 4. T'attribuer le rôle d'Admin Fonctionnel
+-- 5. T'attribuer le rôle d'Admin Fonctionnel
 INSERT INTO personnel_role (personnel_id, role_id)
 SELECT p.id, r.id 
 FROM personnel p, role r 
@@ -59,3 +65,42 @@ WHERE p.identifiant_scientifique = 'YSEHIL2026' AND r.code = 'ADMIN_FONCTIONNEL'
 --rollback DELETE FROM personnel_role;
 --rollback DELETE FROM personnel;
 --rollback DELETE FROM role_permission;
+
+--changeset yessim17:ajouter-profils-tests-supplementaires
+-- Ajout de profils supplémentaires (un Personnel standard et un Gestionnaire RH) pour tester les différents accès.
+
+-- 1. Créer un personnel standard (Jean Dupont) rattaché à l'IUT
+INSERT INTO personnel (nom, prenom, statut, identifiant_scientifique, structure_id)
+SELECT 'Dupont', 'Jean', 'Maître de conférences', 'JDUPONT2026', id
+FROM structure 
+WHERE code = 'IUT';
+
+-- 2. Attribuer le rôle PERSONNEL à Jean
+INSERT INTO personnel_role (personnel_id, role_id)
+SELECT p.id, r.id 
+FROM personnel p, role r 
+WHERE p.identifiant_scientifique = 'JDUPONT2026' AND r.code = 'PERSONNEL';
+
+-- 3. Créer un gestionnaire RH (Sophie Martin) rattachée au département RH
+INSERT INTO personnel (nom, prenom, statut, identifiant_scientifique, structure_id)
+SELECT 'Martin', 'Sophie', 'Gestionnaire RH', 'SMARTIN2026', id
+FROM structure 
+WHERE code = 'RH';
+
+-- 4. Attribuer le rôle RESPONSABLE_RH à Sophie
+INSERT INTO personnel_role (personnel_id, role_id)
+SELECT p.id, r.id 
+FROM personnel p, role r 
+WHERE p.identifiant_scientifique = 'SMARTIN2026' AND r.code = 'RESPONSABLE_RH';
+
+--rollback DELETE FROM personnel_role WHERE personnel_id IN (SELECT id FROM personnel WHERE identifiant_scientifique IN ('JDUPONT2026', 'SMARTIN2026'));
+--rollback DELETE FROM personnel WHERE identifiant_scientifique IN ('JDUPONT2026', 'SMARTIN2026');
+
+
+--changeset yessim17:initialiser-mots-de-passe
+-- Attribuer le mot de passe "1234" par défaut à l'ensemble des comptes créés
+UPDATE personnel 
+SET password_hash = '1234' 
+WHERE password_hash IS NULL;
+
+--rollback UPDATE personnel SET password_hash = NULL;

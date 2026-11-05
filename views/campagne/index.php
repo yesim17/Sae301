@@ -1,69 +1,60 @@
-<?php
-$erreurChamp = function (string $nom) use ($erreurs): string {
-    return isset($erreurs[$nom]) ? '<p class="erreur-champ">' . e($erreurs[$nom]) . '</p>' : '';
-};
-?>
-<div class="titre-page">
-    <h1>Campagnes de déclaration</h1>
-</div>
-
-<?php require __DIR__ . '/../layout/erreurs.php'; ?>
-
-<form class="carte" method="post" action="<?= e(lien('campagnes')) ?>" novalidate>
+<form action="index.php?page=campagnes" method="POST">
     <?= champCsrf() ?>
-    <h2>Nouvelle campagne</h2>
-    <div class="champ">
-        <label for="titre">Titre <span class="requis">*</span></label>
-        <input type="text" id="titre" name="titre" maxlength="255" value="<?= e($valeurs['titre']) ?>">
-        <?= $erreurChamp('titre') ?>
-    </div>
-    <div class="grille-champs">
-        <div class="champ">
-            <label for="date_debut">Date de début <span class="requis">*</span></label>
-            <input type="date" id="date_debut" name="date_debut" value="<?= e($valeurs['date_debut']) ?>">
-            <?= $erreurChamp('date_debut') ?>
-        </div>
-        <div class="champ">
-            <label for="date_fin">Date de fin <span class="requis">*</span></label>
-            <input type="date" id="date_fin" name="date_fin" value="<?= e($valeurs['date_fin']) ?>">
-            <?= $erreurChamp('date_fin') ?>
-        </div>
-    </div>
-    <div class="champ">
-        <label for="description">Description</label>
-        <textarea id="description" name="description" rows="3"><?= e($valeurs['description']) ?></textarea>
-    </div>
-    <div class="actions-formulaire">
-        <button type="submit" class="bouton">Créer la campagne</button>
-    </div>
-</form>
 
-<section class="carte">
-    <h2>Campagnes existantes</h2>
-    <?php if (!$campagnes): ?>
-        <p>Aucune campagne pour le moment.</p>
-    <?php else: ?>
-        <div class="tableau-defilant">
-            <table>
-                <thead>
-                    <tr>
-                        <th scope="col">Titre</th>
-                        <th scope="col">Début</th>
-                        <th scope="col">Fin</th>
-                        <th scope="col">Description</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <?php foreach ($campagnes as $campagne): ?>
-                        <tr>
-                            <td><?= e($campagne['titre']) ?></td>
-                            <td class="sans-retour"><?= e(dateFr($campagne['date_debut'])) ?></td>
-                            <td class="sans-retour"><?= e(dateFr($campagne['date_fin'])) ?></td>
-                            <td><?= e($campagne['description']) ?></td>
-                        </tr>
-                    <?php endforeach; ?>
-                </tbody>
-            </table>
+    <div class="form-group mb-3">
+        <label for="titre">Titre *</label>
+        <input type="text" id="titre" name="titre" class="form-control" 
+               value="<?= htmlspecialchars($valeurs['titre'] ?? '') ?>" required>
+        <?php if (isset($erreurs['titre'])): ?>
+            <div class="text-danger"><?= $erreurs['titre'] ?></div>
+        <?php endif; ?>
+    </div>
+
+    <div class="form-group mb-3">
+        <label for="periode_reference">Période de référence *</label>
+        <input type="text" id="periode_reference" name="periode_reference" class="form-control" 
+               value="<?= htmlspecialchars($valeurs['periode_reference'] ?? '') ?>" required>
+        <?php if (isset($erreurs['periode_reference'])): ?>
+            <div class="text-danger"><?= $erreurs['periode_reference'] ?></div>
+        <?php endif; ?>
+    </div>
+
+    <div class="form-group mb-3">
+        <label for="nature">Nature *</label>
+        <select id="nature" name="nature" class="form-control" required>
+            <option value="">-- Sélectionner --</option>
+            <option value="Saisie des activités" <?= ($valeurs['nature'] ?? '') === 'Saisie des activités' ? 'selected' : '' ?>>Saisie des activités</option>
+            <option value="Validation annuelle" <?= ($valeurs['nature'] ?? '') === 'Validation annuelle' ? 'selected' : '' ?>>Validation annuelle</option>
+            <option value="Autre" <?= ($valeurs['nature'] ?? '') === 'Autre' ? 'selected' : '' ?>>Autre</option>
+        </select>
+        <?php if (isset($erreurs['nature'])): ?>
+            <div class="text-danger"><?= $erreurs['nature'] ?></div>
+        <?php endif; ?>
+    </div>
+
+    <div class="row">
+        <div class="col-md-6 form-group mb-3">
+            <label for="date_debut">Date de début *</label>
+            <input type="date" id="date_debut" name="date_debut" class="form-control" 
+                   value="<?= htmlspecialchars($valeurs['date_debut'] ?? '') ?>" required>
+            <?php if (isset($erreurs['date_debut'])): ?>
+                <div class="text-danger"><?= $erreurs['date_debut'] ?></div>
+            <?php endif; ?>
         </div>
-    <?php endif; ?>
-</section>
+        <div class="col-md-6 form-group mb-3">
+            <label for="date_fin">Date de fin *</label>
+            <input type="date" id="date_fin" name="date_fin" class="form-control" 
+                   value="<?= htmlspecialchars($valeurs['date_fin'] ?? '') ?>" required>
+            <?php if (isset($erreurs['date_fin'])): ?>
+                <div class="text-danger"><?= $erreurs['date_fin'] ?></div>
+            <?php endif; ?>
+        </div>
+    </div>
+
+    <div class="form-group mb-3">
+        <label for="description">Description</label>
+        <textarea id="description" name="description" class="form-control" rows="3"><?= htmlspecialchars($valeurs['description'] ?? '') ?></textarea>
+    </div>
+
+    <button type="submit" class="btn btn-primary">Enregistrer</button>
+</form>
