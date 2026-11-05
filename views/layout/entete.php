@@ -9,6 +9,7 @@ $menu = [
     'personnels'  => 'Profils',
     'grille'      => 'Grille des droits',
     'campagnes'   => 'Campagnes',
+    'comparaison' => 'Comparaison',
 ];
 $utilisateurConnecte = moi();
 ?>
