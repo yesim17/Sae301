@@ -161,3 +161,20 @@ WHERE identifiant_scientifique IN ('CLEFEBVRE2026', 'KBENALI2026', 'MLEROY2026',
  
 --rollback DELETE FROM personnel_role WHERE personnel_id IN (SELECT id FROM personnel WHERE identifiant_scientifique IN ('CLEFEBVRE2026', 'KBENALI2026', 'MLEROY2026', 'TPETIT2026', 'CDUBOIS2026', 'LMOREAU2026', 'NHADDAD2026'));
 --rollback DELETE FROM personnel WHERE identifiant_scientifique IN ('CLEFEBVRE2026', 'KBENALI2026', 'MLEROY2026', 'TPETIT2026', 'CDUBOIS2026', 'LMOREAU2026', 'NHADDAD2026');
+
+
+--changeset yessim17:insert-donnees-gabarit
+-- Gabarits de déclaration d'activité. Les statuts requis correspondent aux statuts des profils de test.
+ 
+INSERT INTO gabarit (code, libelle, statut_requis, description) VALUES
+('ENS_COURS_MCF', 'Cours magistraux et TD', 'Maître de conférences', 'Déclaration des heures de cours magistraux et de travaux dirigés'),
+('ENS_COURS_MCF_F', 'Cours magistraux et TD', 'Maîtresse de conférences', 'Déclaration des heures de cours magistraux et de travaux dirigés'),
+('ENS_RECH_PUBLI', 'Enseignement et publications', 'Enseignant-chercheur', 'Déclaration conjointe des heures d''enseignement et des travaux de recherche publiés'),
+('RECH_DOCTORAT', 'Travaux de thèse', 'Doctorante', 'Suivi des travaux de recherche menés dans le cadre du doctorat'),
+('ADM_RH_GESTION', 'Gestion administrative RH', 'Gestionnaire RH', 'Suivi des dossiers du personnel, des campagnes et des validations'),
+('ADM_SYSTEME', 'Administration système', 'Ingénieure système', 'Maintenance, supervision et évolution de l''infrastructure'),
+('ADM_APPLICATIF', 'Administration applicative', 'Administrateur applicatif', 'Paramétrage, support et suivi des applications métier'),
+('SUPPORT_TECH', 'Support technique', 'Technicien', 'Interventions et assistance technique auprès des utilisateurs'),
+('DEV_PROJET', 'Développement de projet', 'Etudiant/Dev', 'Développement logiciel dans le cadre d''un projet pédagogique');
+ 
+--rollback DELETE FROM gabarit WHERE code IN ('ENS_COURS_MCF', 'ENS_COURS_MCF_F', 'ENS_RECH_PUBLI', 'RECH_DOCTORAT', 'ADM_RH_GESTION', 'ADM_SYSTEME', 'ADM_APPLICATIF', 'SUPPORT_TECH', 'DEV_PROJET');

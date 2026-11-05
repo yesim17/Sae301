@@ -173,3 +173,22 @@ ADD COLUMN nature VARCHAR(100) NOT NULL;
 -- Ajout de la colonne avec un mot de passe par défaut à '1234' pour tous
 ALTER TABLE personnel ADD COLUMN IF NOT EXISTS password_hash VARCHAR(255) DEFAULT '1234';
 --rollback ALTER TABLE personnel DROP COLUMN IF EXISTS password_hash;
+
+
+--changeset yessim17:creer-table-gabarit
+CREATE TABLE IF NOT EXISTS gabarit (
+    id SERIAL PRIMARY KEY,
+    code VARCHAR(50) UNIQUE NOT NULL,
+    libelle VARCHAR(100) NOT NULL,
+    statut_requis VARCHAR(100) NOT NULL,
+    description TEXT
+);
+ 
+--rollback DROP TABLE gabarit;
+
+--changeset yesim17:modif-table-gabarit
+UPDATE gabarit 
+SET statut_requis = 'Maître de conférences' 
+WHERE code = 'GABARIT_ENS';
+
+--rollback UPDATE gabarit SET statut_requis = 'Enseignant-cherche

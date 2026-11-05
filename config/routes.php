@@ -35,4 +35,6 @@ return [
 
     'campagnes'            => ['campagne', 'pageCampagnes', 'CAMPAGNE_CREATE'],
     'comparaison'          => ['comparaison', 'pageComparaison', 'ACTIVITE_VALIDATE'],
-];
+
+    'generer_rapport' => ['Gestionrapport', 'afficherRapport', 'connecte'],
+    ];
