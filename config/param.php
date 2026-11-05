@@ -1,8 +1,0 @@
-<?php
-// config/param.php
-
-// Paramètres de connexion PostgreSQL (Serveur local)
-define('DB_HOST', 'localhost');
-define('DB_NAME', 'postgres'); 
-define('DB_USER', 'postgres');
-define('DB_PASS', '1234');
