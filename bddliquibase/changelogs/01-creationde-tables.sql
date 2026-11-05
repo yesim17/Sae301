@@ -163,3 +163,13 @@ CREATE TABLE campagne (
 CREATE INDEX idx_campagne_dates ON campagne(date_debut, date_fin);
 --rollback DROP INDEX idx_campagne_dates;
 --rollback DROP TABLE campagne;
+
+--changeset yessim17:alter-table-campagne-ajout-colonnes
+ALTER TABLE campagne 
+ADD COLUMN periode_reference VARCHAR(50) NOT NULL,
+ADD COLUMN nature VARCHAR(100) NOT NULL;
+
+--changeset yessim17:ajouter-colonne-password-simple
+-- Ajout de la colonne avec un mot de passe par défaut à '1234' pour tous
+ALTER TABLE personnel ADD COLUMN IF NOT EXISTS password_hash VARCHAR(255) DEFAULT '1234';
+--rollback ALTER TABLE personnel DROP COLUMN IF EXISTS password_hash;

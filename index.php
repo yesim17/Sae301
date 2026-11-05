@@ -6,10 +6,12 @@
 session_set_cookie_params(['httponly' => true, 'samesite' => 'Lax']);
 session_start();
 
+
 require_once __DIR__ . '/config/connexion.php';
 require_once __DIR__ . '/config/helpers.php';
 require_once __DIR__ . '/model/droits.php';
 require_once __DIR__ . '/model/participation.php';
+require_once __DIR__ . '/model/personnel.php'; 
 
 // Même fuseau pour PHP et PostgreSQL : les dates de délégation sont saisies en heure française.
 date_default_timezone_set('Europe/Paris');
@@ -56,6 +58,7 @@ try {
     require_once __DIR__ . '/controller/' . $controleur . '.php';
     $action($pdo);
 } catch (PDOException $e) {
-    error_log('Erreur SQL : ' . $e->getMessage());
-    erreur(500, "Une erreur technique est survenue. Votre action n'a pas été enregistrée.");
+   echo "<h1>Erreur SQL Critique :</h1>";
+    echo "<p>" . $e->getMessage() . "</p>";
+    exit();
 }
