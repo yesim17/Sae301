@@ -1,17 +1,15 @@
 <?php
-function agregerActivites(PDO $pdo, string $debut, string $fin): array
+function agregerActivitesParType(PDO $pdo, string $debut, string $fin): array
 {
     $requete = $pdo->prepare(
-        "SELECT (EXTRACT(YEAR FROM age(a.date_activite, CAST(:debut1 AS date))) * 12
-               + EXTRACT(MONTH FROM age(a.date_activite, CAST(:debut2 AS date))))::int + 1 AS mois,
-                COUNT(*) AS total,
-                COUNT(*) FILTER (WHERE a.est_collective) AS collectives,
-                COUNT(*) FILTER (WHERE NOT a.est_collective) AS individuelles
+        "SELECT COALESCE(t.libelle, 'Sans type') AS type,
+                COUNT(*) AS total
          FROM activite a
-         WHERE a.date_activite BETWEEN CAST(:debut3 AS date) AND CAST(:fin AS date)
-         GROUP BY mois
-         ORDER BY mois"
+         LEFT JOIN type_activite t ON t.id = a.type_activite_id
+         WHERE a.date_activite BETWEEN CAST(:debut AS date) AND CAST(:fin AS date)
+         GROUP BY type
+         ORDER BY type"
     );
-    $requete->execute(['debut1' => $debut, 'debut2' => $debut, 'debut3' => $debut, 'fin' => $fin]);
+    $requete->execute(['debut' => $debut, 'fin' => $fin]);
     return $requete->fetchAll();
 }

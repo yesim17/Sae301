@@ -52,28 +52,13 @@
         <p><strong>Données insuffisantes</strong> pour comparer ces deux périodes.</p>
     </div>
 <?php elseif ($resultat !== null): ?>
+    <?php $opts = JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT; ?>
     <section class="carte">
-        <h2>Résultats côte à côte</h2>
-        <div class="tableau-defilant">
-            <table>
-                <thead>
-                <tr>
-                    <th scope="col"></th>
-                    <th scope="col"><?= e($resultat['a']['titre']) ?><br><span class="aide"><?= e(dateFr($resultat['a']['date_debut'])) ?> → <?= e(dateFr($resultat['a']['date_fin'])) ?></span></th>
-                    <th scope="col"><?= e($resultat['b']['titre']) ?><br><span class="aide"><?= e(dateFr($resultat['b']['date_debut'])) ?> → <?= e(dateFr($resultat['b']['date_fin'])) ?></span></th>
-                </tr>
-                </thead>
-                <tbody>
-                <tr><th scope="row">Total d'activités</th><td><?= (int) $resultat['total_a'] ?></td><td><?= (int) $resultat['total_b'] ?></td></tr>
-                <tr><th scope="row">Individuelles</th><td><?= (int) $resultat['individuelles_a'] ?></td><td><?= (int) $resultat['individuelles_b'] ?></td></tr>
-                <tr><th scope="row">Collectives</th><td><?= (int) $resultat['collectives_a'] ?></td><td><?= (int) $resultat['collectives_b'] ?></td></tr>
-                </tbody>
-            </table>
-        </div>
-    </section>
-
-    <section class="carte">
-        <h2>Tendance des activités par mois</h2>
+        <h2>Activités par type d'activité</h2>
+        <p class="aide">
+            <?= e($resultat['a']['titre']) ?> : <?= (int) $resultat['total_a'] ?> activité(s) —
+            <?= e($resultat['b']['titre']) ?> : <?= (int) $resultat['total_b'] ?> activité(s)
+        </p>
         <canvas id="graphique" height="110"></canvas>
         <div class="actions-formulaire">
             <button type="button" class="bouton" id="export-png">Exporter en PNG</button>
@@ -82,18 +67,50 @@
 
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
     <script>
+        const types = <?= json_encode($resultat['types'], $opts) ?>;
+        const serieA = <?= json_encode($resultat['serie_a'], $opts) ?>;
+        const serieB = <?= json_encode($resultat['serie_b'], $opts) ?>;
+        const nomA = <?= json_encode($resultat['a']['titre'], $opts) ?>;
+        const nomB = <?= json_encode($resultat['b']['titre'], $opts) ?>;
+
+        // Une couleur par type d'activité : la période A en couleur pleine, la B en version claire
+        const palette = ['#1c5fb4', '#e69a00', '#2ec27e', '#c01c28', '#813d9c', '#865e3c', '#26a269', '#e01b24'];
+        const couleurs = types.map((t, i) => palette[i % palette.length]);
+        const couleursClaires = couleurs.map(c => c + '88');
+
         const graphique = new Chart(document.getElementById('graphique'), {
             type: 'bar',
             data: {
-                labels: <?= json_encode($resultat['libelles'], JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>,
+                labels: types,
                 datasets: [
-                    { label: <?= json_encode($resultat['a']['titre'], JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>, data: <?= json_encode($resultat['serie_a'], JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>, backgroundColor: '#1c5fb4' },
-                    { label: <?= json_encode($resultat['b']['titre'], JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>, data: <?= json_encode($resultat['serie_b'], JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>, backgroundColor: '#e69a00' }
+                    { label: nomA, data: serieA, backgroundColor: couleurs, borderColor: couleurs, borderWidth: 2 },
+                    { label: nomB, data: serieB, backgroundColor: couleursClaires, borderColor: couleurs, borderWidth: 2 }
                 ]
             },
             options: {
                 animation: false,
-                scales: { y: { beginAtZero: true, ticks: { precision: 0 }, title: { display: true, text: "Nombre d'activités" } } }
+                // Barres moyennes : épaisseur plafonnée
+                maxBarThickness: 56,
+                barPercentage: 0.9,
+                categoryPercentage: 0.6,
+                plugins: {
+                    legend: {
+                        labels: {
+                            // Légende : A = plein, B = clair (les couleurs identifient les types)
+                            generateLabels: function (c) {
+                                return [
+                                    { text: nomA + ' (couleur pleine)', fillStyle: '#555', strokeStyle: '#555', lineWidth: 0, datasetIndex: 0 },
+                                    { text: nomB + ' (couleur claire)', fillStyle: '#bbb', strokeStyle: '#555', lineWidth: 1, datasetIndex: 1 }
+                                ];
+                            }
+                        },
+                        onClick: null
+                    }
+                },
+                scales: {
+                    x: { title: { display: true, text: "Type d'activité" } },
+                    y: { beginAtZero: true, max: Math.max(...serieA, ...serieB) + 1, ticks: { precision: 0 }, title: { display: true, text: "Nombre d'activités" } }
+                }
             },
             plugins: [{
                 id: 'fondBlanc',
@@ -119,6 +136,4 @@
 
 <style>
     .message-alerte { background: var(--attente-fond); color: var(--attente); }
-    th, td { text-align: center; }
-    thead th:first-child, tbody th { text-align: left; }
 </style>

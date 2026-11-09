@@ -7,6 +7,16 @@ function dureeEnJours(array $campagne): int
     return (new DateTime($campagne['date_debut']))->diff(new DateTime($campagne['date_fin']))->days + 1;
 }
 
+/** Transforme les lignes SQL en tableau [type => total]. */
+function regrouperParType(array $lignes): array
+{
+    $res = [];
+    foreach ($lignes as $l) {
+        $res[$l['type']] = (int) $l['total'];
+    }
+    return $res;
+}
+
 function pageComparaison(PDO $pdo): void
 {
     $campagnes = listerCampagnes($pdo);
@@ -36,35 +46,30 @@ function pageComparaison(PDO $pdo): void
                     $alertes[] = "Attention : les deux campagnes n'ont pas la même durée ($dureeA jours contre $dureeB jours). La comparaison peut être biaisée.";
                 }
 
-                $donneesA = agregerActivites($pdo, $a['date_debut'], $a['date_fin']);
-                $donneesB = agregerActivites($pdo, $b['date_debut'], $b['date_fin']);
+                $parTypeA = regrouperParType(agregerActivitesParType($pdo, $a['date_debut'], $a['date_fin']));
+                $parTypeB = regrouperParType(agregerActivitesParType($pdo, $b['date_debut'], $b['date_fin']));
 
-                if (!$donneesA || !$donneesB) {
+                if (!$parTypeA || !$parTypeB) {
                     $insuffisant = true;
                 } else {
-                    $nbMois = max(array_column(array_merge($donneesA, $donneesB), 'mois'));
-                    $totauxA = array_column($donneesA, 'total', 'mois');
-                    $totauxB = array_column($donneesB, 'total', 'mois');
-                    $libelles = [];
+                    $types = array_unique(array_merge(array_keys($parTypeA), array_keys($parTypeB)));
+                    sort($types);
+
                     $serieA = [];
                     $serieB = [];
-                    for ($m = 1; $m <= $nbMois; $m++) {
-                        $libelles[] = 'Mois ' . $m;
-                        $serieA[] = (int) ($totauxA[$m] ?? 0);
-                        $serieB[] = (int) ($totauxB[$m] ?? 0);
+                    foreach ($types as $type) {
+                        $serieA[] = $parTypeA[$type] ?? 0;
+                        $serieB[] = $parTypeB[$type] ?? 0;
                     }
+
                     $resultat = [
                         'a' => $a,
                         'b' => $b,
-                        'total_a' => array_sum($serieA),
-                        'total_b' => array_sum($serieB),
-                        'individuelles_a' => array_sum(array_column($donneesA, 'individuelles')),
-                        'individuelles_b' => array_sum(array_column($donneesB, 'individuelles')),
-                        'collectives_a' => array_sum(array_column($donneesA, 'collectives')),
-                        'collectives_b' => array_sum(array_column($donneesB, 'collectives')),
-                        'libelles' => $libelles,
+                        'types' => array_values($types),
                         'serie_a' => $serieA,
                         'serie_b' => $serieB,
+                        'total_a' => array_sum($serieA),
+                        'total_b' => array_sum($serieB),
                     ];
                 }
             }
