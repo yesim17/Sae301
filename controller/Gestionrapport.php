@@ -1,91 +1,134 @@
 <?php
 // controller/Gestionrapport.php
+// Génération du rapport d'activités individuel : validation des entrées, revérification du gabarit
+// côté serveur, puis envoi du fichier en téléchargement forcé.
 
 require_once __DIR__ . '/../model/rapport.php';
 
-function afficherRapport($pdo) {
-    $moi = moi(); 
-    $userStatut = $moi['statut'] ?? 'Personnel standard';
-    $userId = $moi['id'];
+/** Lit les champs du formulaire de rapport. */
+function lireFormulaireRapport(): array
+{
+    return [
+        'date_debut' => post('date_debut'),
+        'date_fin' => post('date_fin'),
+        'gabarit' => post('gabarit'),
+        'format' => post('format'),
+    ];
+}
 
-    $messageErreur = $_SESSION['erreur_rapport'] ?? null;
-    $messageSucces = $_SESSION['succes_rapport'] ?? null;
-    unset($_SESSION['erreur_rapport'], $_SESSION['succes_rapport']);
+/** Valide les entrées du formulaire. Renvoie ['champ' => message] ; vide si tout est correct. */
+function validerRapport(array $valeurs): array
+{
+    $erreurs = [];
 
-    $gabarits = getGabaritsCompatibles($pdo, $userStatut);
+    if ($valeurs['date_debut'] === '') {
+        $erreurs['date_debut'] = 'La date de début est obligatoire.';
+    } elseif (!dateValide($valeurs['date_debut'])) {
+        $erreurs['date_debut'] = "La date de début n'est pas valide.";
+    }
+
+    if ($valeurs['date_fin'] === '') {
+        $erreurs['date_fin'] = 'La date de fin est obligatoire.';
+    } elseif (!dateValide($valeurs['date_fin'])) {
+        $erreurs['date_fin'] = "La date de fin n'est pas valide.";
+    }
+
+    if (!isset($erreurs['date_debut']) && !isset($erreurs['date_fin'])
+        && $valeurs['date_debut'] > $valeurs['date_fin']) {
+        $erreurs['date_fin'] = 'La date de fin doit être postérieure ou égale à la date de début.';
+    }
+
+    if ($valeurs['gabarit'] === '') {
+        $erreurs['gabarit'] = 'Choisissez un gabarit.';
+    }
+
+    if (!isset(FORMATS_EXPORT[$valeurs['format']])) {
+        $erreurs['format'] = "Choisissez un format d'export.";
+    }
+
+    return $erreurs;
+}
+
+/** Message d'alerte conservé en session et affiché à la page suivante. */
+function enregistrerAlerteRapport(string $message): void
+{
+    flash('erreur', $message);
+}
+
+/**
+ * Revérifie le gabarit côté serveur (le code reçu du formulaire n'est jamais cru) puis prépare
+ * le fichier. Renvoie ['alerte' => ?string, 'export' => ?array] : un gabarit refusé laisse
+ * « export » à null, donc aucun fichier n'est généré.
+ */
+function preparerRapport(PDO $pdo, array $utilisateur, array $valeurs): array
+{
+    $verification = verifierCompatibiliteGabarit(
+        $pdo,
+        $valeurs['gabarit'],
+        (int) $utilisateur['id'],
+        (string) $utilisateur['statut'],
+        $valeurs['date_debut'],
+        $valeurs['date_fin']
+    );
+
+    if (!$verification['autorise']) {
+        return ['alerte' => $verification['message'], 'export' => null];
+    }
+
+    $activites = getActivitesConfirmees(
+        $pdo,
+        (int) $utilisateur['id'],
+        $valeurs['date_debut'],
+        $valeurs['date_fin']
+    );
+
+    return [
+        'alerte' => null,
+        'export' => genererExport($activites, [
+            'personnel' => $utilisateur,
+            'date_debut' => $valeurs['date_debut'],
+            'date_fin' => $valeurs['date_fin'],
+            'gabarit' => $verification['gabarit'],
+        ], $valeurs['format']),
+    ];
+}
+
+function afficherRapport(PDO $pdo): void
+{
+    $utilisateur = moi();
+    $gabarits = gabaritsDisponibles($pdo, (int) $utilisateur['id'], (string) $utilisateur['statut']);
+    $erreurs = [];
+    $valeurs = ['date_debut' => '', 'date_fin' => '', 'gabarit' => '', 'format' => 'pdf'];
 
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-        $dateDebut = $_POST['date_debut'] ?? '';
-        $dateFin = $_POST['date_fin'] ?? '';
-        $gabaritCode = $_POST['gabarit'] ?? '';
-        $format = $_POST['format'] ?? 'pdf';
+        // Le jeton CSRF de toute requête POST est déjà vérifié par index.php avant le contrôleur.
+        $valeurs = lireFormulaireRapport();
+        $erreurs = validerRapport($valeurs);
 
-        $verification = verifierCompatibiliteGabarit($pdo, $gabaritCode, $userStatut);
-        
-        if (!$verification['autorise']) {
-            $_SESSION['erreur_rapport'] = $verification['message'];
-            rediriger('generer_rapport');
-        }
+        if (!$erreurs) {
+            $preparation = preparerRapport($pdo, $utilisateur, $valeurs);
 
-        $activites = getActivitesConfirmees($pdo, $userId, $dateDebut, $dateFin);
-
-        if ($format === 'csv') {
-            header('Content-Type: text/csv; charset=utf-8');
-            header('Content-Disposition: attachment; filename="rapport_activites_' . date('Y-m-d') . '.csv"');
-            
-            $output = fopen('php://output', 'w');
-            fputcsv($output, ['ID', 'Titre', 'Description', 'Date', 'Type', 'Statut'], ',', '"', '\\');
-            
-            foreach ($activites as $act) {
-                fputcsv($output, [
-                    $act['id'],
-                    $act['titre'],
-                    $act['description'],
-                    $act['date_activite'],
-                    $act['type_libelle'] ?? '',
-                    $act['statut']
-                ], ',', '"', '\\');
+            if ($preparation['alerte'] !== null) {
+                enregistrerAlerteRapport($preparation['alerte']);
+                rediriger('generer_rapport');
             }
-            fclose($output);
-            exit;
-        } else {
-            // --- EXPORT PDF COMPLET ET STRUCTURÉ ---
-            header('Content-Type: application/pdf');
-            header('Content-Disposition: attachment; filename="rapport_activites_' . date('Y-m-d') . '.pdf"');
-            header('Cache-Control: private, max-age=0, must-revalidate');
-            header('Pragma: public');
 
-            // Construction d'un flux PDF structuré avec la liste des activités
-            $pdfContent = "%PDF-1.4\n";
-            $pdfContent .= "1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj\n";
-            $pdfContent .= "2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj\n";
-            $pdfContent .= "3 0 obj << /Type /Page /Parent 2 0 R /Resources << /Font << /F1 4 0 R >> >> /MediaBox [0 0 595 842] /Contents 5 0 R >> endobj\n";
-            $pdfContent .= "4 0 obj << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> endobj\n";
-            
-            // Texte et contenu du rapport détaillé
-            $stream = "BT /F1 14 Tf 50 780 Td (Rapport d'activites individuel) Tj ";
-            $stream .= "0 -20 Td /F1 10 Tf (Periode : Du " . $dateDebut . " au " . $dateFin . ") Tj ";
-            $stream .= "0 -15 Td (Statut : " . addslashes($userStatut) . ") Tj ";
-            $stream .= "0 -15 Td (Nombre d'activites confirmees : " . count($activites) . ") Tj ";
-            
-            $y = 700;
-            foreach ($activites as $act) {
-                $ligne = "- [" . $act['date_activite'] . "] " . $act['titre'] . " (" . ($act['type_libelle'] ?? 'Autre') . ") - Statut : " . $act['statut'];
-                $stream .= "0 -25 Td (" . addslashes($ligne) . ") Tj ";
-                $y -= 25;
+            $export = $preparation['export'];
+            // Le fichier est la seule réponse : aucune sortie ne doit précéder les en-têtes.
+            while (ob_get_level() > 0) {
+                ob_end_clean();
             }
-            $stream .= "ET";
-
-            $pdfContent .= "5 0 obj << /Length " . strlen($stream) . " >> stream\n" . $stream . "\nendstream\nendobj\n";
-            $pdfContent .= "xref\n0 6\n0000000000 65535 f \n0000000009 00000 n \n0000000058 00000 n \n0000000115 00000 n \n0000000235 00000 n \n0000000305 00000 n \n";
-            $pdfContent .= "trailer << /Size 6 /Root 1 0 R >>\nstartxref\n395\n%%EOF";
-
-            echo $pdfContent;
+            foreach (entetesTelechargement($export) as $entete) {
+                header($entete);
+            }
+            echo $export['contenu'];
             exit;
         }
     }
 
-    require_once __DIR__ . '/../views/layout/entete.php';
-    require_once __DIR__ . '/../views/Rapport/ViewRapport.php';
-    require_once __DIR__ . '/../views/layout/pied.php';
+    afficher('Rapport/ViewRapport', [
+        'valeurs' => $valeurs,
+        'erreurs' => $erreurs,
+        'gabarits' => $gabarits,
+    ]);
 }

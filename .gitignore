@@ -1,3 +1,5 @@
 /bddliquibase/liquibase.properties
-/config/param.php
+/param.php
 /.idea/
+/vendor/
+UserStory.md
