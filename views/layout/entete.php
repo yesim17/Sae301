@@ -2,6 +2,7 @@
 // Menu : une entrée n'apparaît que si la personne connectée a le droit d'ouvrir la page.
 $menu = [
     'activites'   => 'Mon dossier',
+    'generer_rapport' => 'Mon rapport',
     'declarer'    => 'Déclarer',
     'bilan'       => "Bilan d'équipe",
     'alertes'     => 'Alertes',
