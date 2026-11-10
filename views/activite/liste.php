@@ -13,9 +13,11 @@ $peutSoumettre = peutAcceder('soumettre');
 ?>
 <div class="titre-page">
     <h1>Mon dossier d'activités</h1>
-    <?php if (peutAcceder('declarer')): ?>
-        <a class="bouton" href="<?= e(lien('declarer')) ?>">Déclarer une activité</a>
-    <?php endif; ?>
+    <div style="display: flex; gap: 10px; align-items: center;">
+    <a class="bouton bouton-secondaire" href="<?= e(lien('generer_rapport')) ?>">Générer mon rapport</a>        <?php if (peutAcceder('declarer')): ?>
+            <a class="bouton" href="<?= e(lien('declarer')) ?>">Déclarer une activité</a>
+        <?php endif; ?>
+    </div>
 </div>
 
 <form class="filtres carte" method="get" action="index.php">
