@@ -34,4 +34,5 @@ return [
     'grille'               => ['droits', 'pageGrille', 'titulaire:ADMIN_FONCTIONNEL'],
 
     'campagnes'            => ['campagne', 'pageCampagnes', 'CAMPAGNE_CREATE'],
+    'comparaison'          => ['comparaison', 'pageComparaison', 'ACTIVITE_VALIDATE'],
 ];
