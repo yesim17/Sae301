@@ -35,6 +35,8 @@ return [
 
     'campagnes'            => ['campagne', 'pageCampagnes', 'CAMPAGNE_CREATE'],
     'comparaison'          => ['comparaison', 'pageComparaison', 'ACTIVITE_VALIDATE'],
+    'campagne-cloturer'    => ['campagne', 'cloturerCampagne', 'CAMPAGNE_CREATE'],
 
-    'generer_rapport' => ['Gestionrapport', 'afficherRapport', 'connecte'],
-    ];
+    'relances'             => ['relance', 'pageRelances', 'RELANCE_SEND'],
+    'relances-envoyer'     => ['relance', 'envoyerRelances', 'RELANCE_SEND'],
+];

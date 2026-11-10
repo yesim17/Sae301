@@ -8,5 +8,5 @@
     <!-- Inclut automatiquement tous les fichiers de création de tables présents dans ton dossier "changelogs" -->
    <include file="changelogs/01-creationde-tables.sql" relativeToChangelogFile="true"/>
    <include file="changelogs/02-insert-donnees.sql" relativeToChangelogFile="true"/>
-
+    <include file="changelogs/03-relances.sql" relativeToChangelogFile="true"/>
 </databaseChangeLog>

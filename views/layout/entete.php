@@ -10,6 +10,7 @@ $menu = [
     'grille'      => 'Grille des droits',
     'campagnes'   => 'Campagnes',
     'comparaison' => 'Comparaison',
+    'relances'    => 'Relances',
 ];
 $utilisateurConnecte = moi();
 ?>
