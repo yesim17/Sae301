@@ -26,6 +26,39 @@ const CHAMPS_PAR_TYPE = [
     'ADM' => [
         'mission' => ['libelle' => 'Mission ou instance', 'format' => 'texte', 'obligatoire' => true],
     ],
+
+    // Nouveaux types d'activités
+    'PROJ_RECH' => [
+        'intitule_projet' => ['libelle' => 'Intitulé du projet', 'format' => 'texte', 'obligatoire' => true],
+        'volume_horaire'  => ['libelle' => 'Volume horaire estimé (heures)', 'format' => 'nombre', 'obligatoire' => false],
+    ],
+    'CONF_INVITE' => [
+        'nom_conference' => ['libelle' => 'Nom de la conférence', 'format' => 'texte', 'obligatoire' => true],
+        'lieu'           => ['libelle' => 'Lieu / Ville', 'format' => 'texte', 'obligatoire' => true],
+    ],
+    'PRES_SESSION' => [
+        'nom_congres' => ['libelle' => 'Nom du congrès ou de l`événement', 'format' => 'texte', 'obligatoire' => true],
+        'intitule_session' => ['libelle' => 'Intitulé de la session présidée', 'format' => 'texte', 'obligatoire' => false],
+    ],
+    'RELECTURE_ART' => [
+        'nom_revue' => ['libelle' => 'Nom de la revue ou de la conférence', 'format' => 'texte', 'obligatoire' => true],
+        'nombre_papiers' => ['libelle' => 'Nombre d`articles relus', 'format' => 'nombre', 'obligatoire' => false],
+    ],
+    'ORG_EVENT' => [
+        'nom_evenement' => ['libelle' => 'Nom de l`événement', 'format' => 'texte', 'obligatoire' => true]
+    ],
+    'GEST_PLAT' => [
+        'nom_plateforme' => ['libelle' => 'Nom de la plateforme', 'format' => 'texte', 'obligatoire' => true],
+        'volume_horaire' => ['libelle' => 'Volume horaire de gestion', 'format' => 'nombre', 'obligatoire' => false],
+    ],
+    'COMITE_SELECT' => [
+        'intitule_poste' => ['libelle' => 'Intitulé du poste / Concours', 'format' => 'texte', 'obligatoire' => true],
+        'etablissement'  => ['libelle' => 'Établissement concerné', 'format' => 'texte', 'obligatoire' => false],
+    ],
+    'EXP_DOSSIER' => [
+        'type_dossier' => ['libelle' => 'Type de dossier évalué', 'format' => 'texte', 'obligatoire' => true],
+        'reference'    => ['libelle' => 'Référence ou organisme mandataire', 'format' => 'texte', 'obligatoire' => false],
+    ],
 ];
 
 /** Colonnes autorisées pour le tri (liste blanche : ces valeurs vont directement dans le SQL). */
