@@ -1,52 +1,42 @@
 <?php
 // model/rapport.php
+// Rapport d'activités individuel : activités confirmées sur une période, gabarits liés au statut,
+// contrôle de compatibilité et génération des exports.
 
-function getActivitesConfirmees($pdo, $personnelId, $dateDebut, $dateFin) {
-    $sql = "SELECT a.*, t.libelle as type_libelle 
-            FROM activite a
-            LEFT JOIN type_activite t ON a.type_activite_id = t.id
-            WHERE a.personnel_id = :personnel_id 
-              AND a.date_activite BETWEEN :date_debut AND :date_fin 
-              AND a.statut IN ('soumise', 'validee')
-            ORDER BY a.date_activite ASC";
-              
-    $stmt = $pdo->prepare($sql);
-    $stmt->execute([
-        'personnel_id' => $personnelId,
-        'date_debut' => $dateDebut,
-        'date_fin' => $dateFin
+/** Statut d'activité exclu du rapport définitif : un brouillon n'a pas encore été soumis. */
+const STATUT_ACTIVITE_BROUILLON = 'brouillon';
+
+/**
+ * Activités confirmées d'un personnel sur la période [dateDebut, dateFin], bornes incluses.
+ * Les brouillons sont exclus et le libellé du type d'activité est joint à chaque ligne.
+ *
+ * Les dates sont au format AAAA-MM-JJ ; une période inversée ou mal formée lève une exception
+ * (le contrôleur valide les entrées avant l'appel, cette vérification reste une garde).
+ */
+function getActivitesConfirmees(PDO $pdo, int $personnelId, string $dateDebut, string $dateFin): array
+{
+    if (!dateValide($dateDebut) || !dateValide($dateFin)) {
+        throw new InvalidArgumentException('Les dates du rapport ne sont pas valides.');
+    }
+    if ($dateDebut > $dateFin) {
+        throw new InvalidArgumentException('La date de début doit précéder ou égaler la date de fin.');
+    }
+
+    $requete = $pdo->prepare(
+        'SELECT a.id, a.titre, a.description, a.date_activite, a.est_collective, a.statut,
+                t.libelle AS type_libelle
+         FROM activite a
+         LEFT JOIN type_activite t ON t.id = a.type_activite_id
+         WHERE a.personnel_id = :personnel
+           AND a.date_activite BETWEEN :debut AND :fin
+           AND a.statut <> :brouillon
+         ORDER BY a.date_activite ASC, a.id ASC'
+    );
+    $requete->execute([
+        'personnel' => $personnelId,
+        'debut' => $dateDebut,
+        'fin' => $dateFin,
+        'brouillon' => STATUT_ACTIVITE_BROUILLON,
     ]);
-    return $stmt->fetchAll(PDO::FETCH_ASSOC);
-}
-
-function verifierCompatibiliteGabarit($pdo, $gabaritCode, $userStatut) {
-    $stmt = $pdo->prepare("SELECT * FROM gabarit WHERE code = :code");
-    $stmt->execute(['code' => $gabaritCode]);
-    $gabarit = $stmt->fetch(PDO::FETCH_ASSOC);
-
-    if (!$gabarit) {
-        return ['autorise' => false, 'message' => "Erreur : Gabarit inconnu."];
-    }
-
-    $statutRequis = trim($gabarit['statut_requis']);
-    $statutUser = trim($userStatut);
-
-    $estCompatible = ($statutRequis === $statutUser) || 
-                     (($statutRequis === 'Maître de conférences' || $statutRequis === 'Maîtresse de conférences') && 
-                      ($statutUser === 'Maître de conférences' || $statutUser === 'Maîtresse de conférences'));
-
-    if (!$estCompatible) {
-        return [
-            'autorise' => false, 
-            'message' => "Signal d'alerte : Ce gabarit (« {$gabarit['libelle']} ») est inapplicable à votre statut actuel ($userStatut)."
-        ];
-    }
-
-    return ['autorise' => true, 'gabarit' => $gabarit];
-}
-
-function getGabaritsCompatibles($pdo, $userStatut) {
-    $stmt = $pdo->prepare("SELECT * FROM gabarit WHERE statut_requis = :statut OR statut_requis IN ('Maître de conférences', 'Maîtresse de conférences', 'Enseignant-chercheur') ORDER BY libelle ASC");
-    $stmt->execute(['statut' => $userStatut]);
-    return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    return $requete->fetchAll();
 }
