@@ -11,6 +11,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/../config/helpers.php';
 require_once __DIR__ . '/../model/rapport.php';
 require_once __DIR__ . '/../model/personnel.php';
+require_once __DIR__ . '/../controller/Gestionrapport.php';
 
 $GLOBALS['total'] = 0;
 $GLOBALS['echecs'] = 0;
@@ -332,6 +333,171 @@ test('n\'ouvre pas de période quand le statut ne change pas', function (): void
 
     $nombre = (int) $pdo->query('SELECT COUNT(*) FROM personnel_statut_historique WHERE personnel_id = 1')->fetchColumn();
     egal(1, $nombre, 'périodes d\'historique');
+});
+
+// ---------- Tâche 4 : export des documents ----------
+
+echo "\nTâche 4 - export des documents\n";
+
+/** Contexte d'export correspondant au jeu de données de test. */
+function contexteDeTest(): array
+{
+    return [
+        'personnel' => ['nom' => 'Dupont', 'nom_usage' => null, 'prenom' => 'Jean', 'statut' => 'Maître de conférences'],
+        'date_debut' => '2026-01-01',
+        'date_fin' => '2026-06-30',
+        'gabarit' => [
+            'code' => 'ENS_COURS_MCF',
+            'libelle' => 'Cours magistraux et TD',
+            'statut_requis' => 'Maître de conférences',
+            'description' => 'Déclaration des heures de cours',
+        ],
+    ];
+}
+
+test('le CSV est en UTF-8 avec BOM et séparateur point-virgule', function (): void {
+    $csv = contenuCsv(getActivitesConfirmees(baseDeTest(), 1, '2026-01-01', '2026-06-30'));
+    egal("\xEF\xBB\xBF", substr($csv, 0, 3), 'BOM UTF-8');
+
+    $lignes = explode("\n", substr($csv, 3));
+    egal('Date;Titre;Type;Nature;Statut;Description', $lignes[0] ?? null, 'en-tête');
+    verifie(count($lignes) >= 4, 'lignes manquantes dans le CSV');
+});
+
+test('le CSV ne contient que les activités confirmées du personnel', function (): void {
+    $csv = contenuCsv(getActivitesConfirmees(baseDeTest(), 1, '2026-01-01', '2026-06-30'));
+    verifie(strpos($csv, 'Brouillon en cours') === false, 'un brouillon figure dans le CSV');
+    verifie(strpos($csv, 'Cours de Nadia') === false, 'activité d\'un autre personnel dans le CSV');
+    verifie(strpos($csv, 'Cours magistraux') !== false, 'activité confirmée absente du CSV');
+    verifie(strpos($csv, 'Hors période') === false, 'activité hors période dans le CSV');
+});
+
+test('le CSV échappe les séparateurs et les guillemets', function (): void {
+    $csv = contenuCsv([
+        [
+            'date_activite' => '2026-02-10',
+            'titre' => 'Déjeuner; "département"',
+            'type_libelle' => 'Réunion',
+            'est_collective' => 0,
+            'statut' => 'soumise',
+            'description' => "Ligne 1\nLigne 2",
+        ],
+    ]);
+    verifie(
+        strpos($csv, '"Déjeuner; ""département"""') !== false,
+        'échappement CSV incorrect : ' . $csv
+    );
+    verifie(strpos($csv, "\"Ligne 1\nLigne 2\"") !== false, 'saut de ligne non échappé');
+});
+
+test('le CSV neutralise une cellule interprétée comme formule', function (): void {
+    $csv = contenuCsv([[
+        'date_activite' => '2026-02-10',
+        'titre' => '=1+1',
+        'type_libelle' => 'Test',
+        'est_collective' => 0,
+        'statut' => 'soumise',
+        'description' => '',
+    ]]);
+    verifie(strpos($csv, "'=1+1") !== false, 'formule non neutralisée');
+});
+
+test('le PDF est un document binaire non vide', function (): void {
+    $pdf = contenuPdf(getActivitesConfirmees(baseDeTest(), 1, '2026-01-01', '2026-06-30'), contexteDeTest());
+    egal('%PDF-', substr($pdf, 0, 5), 'signature PDF');
+    verifie(strlen($pdf) > 1000, 'PDF trop petit : ' . strlen($pdf) . ' octets');
+    verifie(strpos($pdf, '%%EOF') !== false, 'PDF non terminé');
+});
+
+test('les en-têtes de téléchargement sont ceux du format demandé', function (): void {
+    $csv = genererExport([], contexteDeTest(), 'csv');
+    egal('text/csv; charset=UTF-8', $csv['type_mime'], 'type MIME CSV');
+    egal('rapport_activites_2026-01-01_2026-06-30.csv', $csv['nom_fichier'], 'nom du fichier CSV');
+
+    $entetes = entetesTelechargement($csv);
+    verifie(in_array('Content-Disposition: attachment; filename="rapport_activites_2026-01-01_2026-06-30.csv"', $entetes, true), 'en-tête de téléchargement CSV');
+    verifie(in_array('Content-Length: ' . strlen($csv['contenu']), $entetes, true), 'taille annoncée');
+});
+
+test('refuse un format d\'export inconnu', function (): void {
+    exceptionAttendue(fn () => genererExport([], contexteDeTest(), 'docx'), InvalidArgumentException::class);
+});
+
+// ---------- Tâche 5 : formulaire et contrôleur ----------
+
+echo "\nTâche 5 - formulaire et contrôleur\n";
+
+/** Personnel connecté du jeu de test (Jean, maître de conférences). */
+function utilisateurDeTest(): array
+{
+    return ['id' => 1, 'nom' => 'Dupont', 'nom_usage' => null, 'prenom' => 'Jean', 'statut' => 'Maître de conférences'];
+}
+
+function formulaireValide(): array
+{
+    return ['date_debut' => '2026-01-01', 'date_fin' => '2026-06-30', 'gabarit' => 'ENS_COURS_MCF', 'format' => 'csv'];
+}
+
+test('valide les champs obligatoires du formulaire', function (): void {
+    $erreurs = validerRapport(['date_debut' => '', 'date_fin' => '', 'gabarit' => '', 'format' => 'docx']);
+    verifie(isset($erreurs['date_debut']), 'date de début non contrôlée');
+    verifie(isset($erreurs['date_fin']), 'date de fin non contrôlée');
+    verifie(isset($erreurs['gabarit']), 'gabarit non contrôlé');
+    verifie(isset($erreurs['format']), 'format non contrôlé');
+});
+
+test('refuse une période inversée', function (): void {
+    $erreurs = validerRapport(['date_debut' => '2026-06-30', 'date_fin' => '2026-01-01', 'gabarit' => 'ENS_COURS_MCF', 'format' => 'pdf']);
+    verifie(isset($erreurs['date_fin']), 'période inversée acceptée');
+});
+
+test('accepte un formulaire complet et valide', function (): void {
+    egal([], validerRapport(formulaireValide()), 'erreurs signalées');
+});
+
+test('bloque la génération et ne produit aucun fichier pour un gabarit étranger', function (): void {
+    $valeurs = formulaireValide();
+    $valeurs['gabarit'] = 'RECH_DOCTORAT';
+
+    $resultat = preparerRapport(baseDeTest(), utilisateurDeTest(), $valeurs);
+    verifie($resultat['alerte'] !== null, 'aucune alerte pour un gabarit incompatible');
+    egal(null, $resultat['export'], 'un fichier a été généré malgré le blocage');
+});
+
+test('pose le message de blocage en session', function (): void {
+    $_SESSION = [];
+    enregistrerAlerteRapport("Signal d'alerte : ce gabarit est inapplicable à votre statut.");
+
+    egal('erreur', $_SESSION['flash'][0]['type'] ?? null, 'type de message');
+    egal(
+        "Signal d'alerte : ce gabarit est inapplicable à votre statut.",
+        $_SESSION['flash'][0]['message'] ?? null,
+        'message de session'
+    );
+});
+
+test('génère le fichier demandé pour un gabarit compatible', function (): void {
+    $resultat = preparerRapport(baseDeTest(), utilisateurDeTest(), formulaireValide());
+    egal(null, $resultat['alerte'], 'alerte inattendue');
+    egal('text/csv; charset=UTF-8', $resultat['export']['type_mime'] ?? null, 'type MIME');
+    verifie(substr($resultat['export']['contenu'] ?? '', 0, 3) === "\xEF\xBB\xBF", 'BOM absent');
+});
+
+test('n\'exporte que les activités du personnel connecté', function (): void {
+    $resultat = preparerRapport(baseDeTest(), utilisateurDeTest(), formulaireValide());
+    $contenu = $resultat['export']['contenu'];
+    verifie(strpos($contenu, 'Cours de Nadia') === false, 'activité d\'un autre personnel exportée');
+    verifie(strpos($contenu, 'Brouillon en cours') === false, 'brouillon exporté');
+    verifie(strpos($contenu, 'Cours magistraux') !== false, 'activité du personnel absenté');
+});
+
+test('génère un PDF quand ce format est demandé', function (): void {
+    $valeurs = formulaireValide();
+    $valeurs['format'] = 'pdf';
+
+    $resultat = preparerRapport(baseDeTest(), utilisateurDeTest(), $valeurs);
+    egal('application/pdf', $resultat['export']['type_mime'] ?? null, 'type MIME');
+    egal('%PDF-', substr($resultat['export']['contenu'] ?? '', 0, 5), 'signature PDF');
 });
 
 echo "\n" . ($GLOBALS['total'] - $GLOBALS['echecs']) . '/' . $GLOBALS['total'] . " tests réussis.\n";
