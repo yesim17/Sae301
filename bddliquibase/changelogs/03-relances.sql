@@ -1,5 +1,5 @@
 -- liquibase formatted sql
-
+--
 --changeset yessim17:create-table-relance
 CREATE TABLE relance (
     id SERIAL PRIMARY KEY,

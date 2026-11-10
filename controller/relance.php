@@ -1,7 +1,7 @@
 <?php
 // controller/relance.php
 // US-22 : relances d'inactivité et rappels d'échéance (permission RELANCE_SEND, vérifiée dans index.php).
-
+//
 require_once __DIR__ . '/../model/relance.php';
 
 const TYPES_RELANCE_LIBELLES = [

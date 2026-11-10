@@ -6,7 +6,7 @@
 //  - un compte désactivé ne reçoit jamais de relance ;
 //  - une seule relance récente par personne (tous types confondus) ;
 //  - plus de rappel quand l'échéance est passée ou quand la campagne est clôturée avant terme.
-
+//
 const SEUIL_INACTIVITE_JOURS = 30;   // sans nouvelle activité depuis ... jours => relance d'inactivité
 const FENETRE_RAPPEL_JOURS = 7;      // rappel pour les échéances qui tombent dans les ... prochains jours
 const DELAI_ENTRE_RELANCES_JOURS = 7; // pas de seconde relance avant ... jours
