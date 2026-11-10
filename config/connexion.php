@@ -2,7 +2,7 @@
 // config/connexion.php
 
 // Inclusion des paramètres
-require_once __DIR__ . '/param.php';
+require_once __DIR__ . '/param (2).php';
 
 try {
     // Création du DSN (Data Source Name) pour PostgreSQL

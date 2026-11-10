@@ -103,34 +103,51 @@ function identifiantDejaPris(PDO $pdo, string $identifiant, int $sauf = 0): bool
     $requete = $pdo->prepare(
         'SELECT 1 FROM personnel WHERE identifiant_scientifique = :identifiant AND id <> :sauf'
     );
-    $requete->execute(['identifiant' => $identifiant, 'sauf' => $sauf]);
+    $requete->execute(['identifiant' => trim($identifiant), 'sauf' => $sauf]);
     return (bool) $requete->fetchColumn();
 }
 
 function colonnesPersonnel(array $d): array
 {
+    $identifiant = isset($d['identifiant_scientifique']) ? trim($d['identifiant_scientifique']) : '';
     return [
-        'nom' => $d['nom'],
-        'nom_usage' => $d['nom_usage'] !== '' ? $d['nom_usage'] : null,
-        'prenom' => $d['prenom'],
-        'statut' => $d['statut'],
-        'identifiant' => $d['identifiant_scientifique'] !== '' ? $d['identifiant_scientifique'] : null,
-        'structure' => $d['structure_id'] !== 0 ? $d['structure_id'] : null,
+        'nom' => trim($d['nom']),
+        'nom_usage' => trim($d['nom_usage']) !== '' ? trim($d['nom_usage']) : null,
+        'prenom' => trim($d['prenom']),
+        'statut' => trim($d['statut']),
+        'identifiant' => $identifiant !== '' ? $identifiant : null,
+        'structure' => (int) ($d['structure_id'] ?? 0) !== 0 ? (int) $d['structure_id'] : null,
     ];
 }
 
 function creerPersonnel(PDO $pdo, array $d, array $roleIds): int
 {
     $pdo->beginTransaction();
+
     $requete = $pdo->prepare(
-        'INSERT INTO personnel (nom, nom_usage, prenom, statut, identifiant_scientifique, structure_id)
-         VALUES (:nom, :nom_usage, :prenom, :statut, :identifiant, :structure)
+        'INSERT INTO personnel (nom, nom_usage, prenom, statut, identifiant_scientifique, structure_id, password_hash, est_actif)
+         VALUES (:nom, :nom_usage, :prenom, :statut, :identifiant, :structure, :password_hash, TRUE)
          RETURNING id'
     );
-    $requete->execute(colonnesPersonnel($d));
+
+    $colonnes = colonnesPersonnel($d);
+    $colonnes['password_hash'] = '1234';
+
+    $requete->execute($colonnes);
     $id = (int) $requete->fetchColumn();
+
+    // Si aucun rôle n'a été coché, attribuer le rôle PERSONNEL par défaut
+    if (empty($roleIds)) {
+        $reqRoleDefaut = $pdo->query("SELECT id FROM role WHERE code = 'PERSONNEL' LIMIT 1");
+        $idRolePersonnel = $reqRoleDefaut->fetchColumn();
+        if ($idRolePersonnel) {
+            $roleIds = [(int) $idRolePersonnel];
+        }
+    }
+
     remplacerRoles($pdo, $id, $roleIds);
     $pdo->commit();
+
     return $id;
 }
 
@@ -178,7 +195,7 @@ function remplacerRoles(PDO $pdo, int $id, array $roleIds): void
 
 function trouverPersonnelParIdentifiant(PDO $pdo, string $identifiant): ?array
 {
-    $requete = $pdo->prepare('SELECT * FROM personnel WHERE identifiant_scientifique = :id LIMIT 1');
+    $requete = $pdo->prepare('SELECT * FROM personnel WHERE LOWER(TRIM(identifiant_scientifique)) = LOWER(TRIM(:id)) LIMIT 1');
     $requete->execute(['id' => $identifiant]);
     $personnel = $requete->fetch();
 

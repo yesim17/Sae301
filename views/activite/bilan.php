@@ -1,11 +1,11 @@
 <div class="titre-page">
-    <h1>Bilan d'équipe</h1>
+    <h1>Activités collectives</h1>
 </div>
-<p class="aide">Activités collectives de votre structure et celles qui vous concernent. Une activité y figure dès sa déclaration, même si des participations sont en attente.</p>
+<p class="aide">Activités collectives que vous avez déclarées ou auxquelles vous participez. Une activité y figure dès sa déclaration, même si des participations sont en attente.</p>
 
 <?php if (!$activites): ?>
     <div class="carte vide" role="status">
-        <p><strong>Aucune activité collective pour votre équipe.</strong></p>
+        <p><strong>Aucune activité collective ne vous concerne pour le moment.</strong></p>
     </div>
 <?php else: ?>
     <?php foreach ($activites as $activite): ?>

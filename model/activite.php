@@ -156,24 +156,26 @@ function trouverActiviteVisible(PDO $pdo, int $id, int $moi, ?int $structure): ?
 /**
  * Bilan d'équipe : activités collectives de la structure de la personne, ou auxquelles elle est liée.
  * Contrairement au dossier personnel, les participations en attente y figurent.
- */
-function bilanEquipe(PDO $pdo, int $moi, ?int $structure): array
+ */function bilanEquipe(PDO $pdo, int $personnelId, ?int $structureId = null): array
 {
     $requete = $pdo->prepare(
-        "SELECT a.id, a.titre, a.date_activite, a.statut,
-                t.libelle AS type_libelle, d.prenom, d.nom, d.nom_usage
+        "SELECT DISTINCT a.*,
+                t.libelle AS type_libelle,
+                s.nom AS structure_nom,
+                p.nom AS declarant_nom,
+                p.nom_usage AS declarant_nom_usage,
+                p.prenom AS declarant_prenom,
+                p.identifiant_scientifique AS declarant_identifiant
          FROM activite a
          LEFT JOIN type_activite t ON t.id = a.type_activite_id
-         LEFT JOIN personnel d ON d.id = a.personnel_id
-         WHERE a.est_collective AND (
-             a.structure_id = :structure
-             OR a.personnel_id = :moi1
-             OR EXISTS (SELECT 1 FROM activite_participant ap
-                        WHERE ap.activite_id = a.id AND ap.personnel_id = :moi2)
-         )
+         LEFT JOIN structure s ON s.id = a.structure_id
+         JOIN personnel p ON p.id = a.personnel_id
+         LEFT JOIN activite_participant ap ON ap.activite_id = a.id
+         WHERE a.est_collective = TRUE
+           AND (a.personnel_id = :personnel_id OR ap.personnel_id = :personnel_id)
          ORDER BY a.date_activite DESC, a.id DESC"
     );
-    $requete->execute(['structure' => $structure, 'moi1' => $moi, 'moi2' => $moi]);
+    $requete->execute(['personnel_id' => $personnelId]);
     return $requete->fetchAll();
 }
 
