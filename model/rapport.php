@@ -40,3 +40,132 @@ function getActivitesConfirmees(PDO $pdo, int $personnelId, string $dateDebut, s
     ]);
     return $requete->fetchAll();
 }
+
+// ---------- Statuts et gabarits ----------
+
+/** Accents et ligatures retirés avant comparaison des statuts. */
+const ACCENTS_STATUT = [
+    'à' => 'a', 'â' => 'a', 'ä' => 'a', 'á' => 'a', 'ã' => 'a',
+    'é' => 'e', 'è' => 'e', 'ê' => 'e', 'ë' => 'e',
+    'î' => 'i', 'ï' => 'i', 'í' => 'i',
+    'ô' => 'o', 'ö' => 'o', 'ó' => 'o', 'õ' => 'o',
+    'ù' => 'u', 'û' => 'u', 'ü' => 'u', 'ú' => 'u',
+    'ÿ' => 'y', 'ç' => 'c', 'œ' => 'oe', 'æ' => 'ae', 'ñ' => 'n',
+];
+
+/** Marques d'écriture inclusive laissées seules après découpage : « Enseignant·e », « Maître(sse) ». */
+const MOTS_INCLUSIFS_SEULS = ['e', 'es', 's', 'se', 'sse', 'ne', 'nes', 'ere'];
+
+/**
+ * Forme canonique d'un statut, pour que la correspondance gabarit / profil fonctionne quelle que
+ * soit la variante stockée : casse, accents, genre (« Maîtresse de conférences ») et écriture
+ * inclusive (« Enseignant·e·s », « Docteur(e) »).
+ */
+function normaliserStatut(string $statut): string
+{
+    $texte = mb_strtolower(trim($statut), 'UTF-8');
+    $texte = strtr($texte, ACCENTS_STATUT);
+    // Séparateurs : tiret, barre oblique (« Etudiant/Dev »), parenthèses et points médians inclusifs.
+    $texte = strtr($texte, [
+        '·' => ' ', '•' => ' ', '’' => ' ', "'" => ' ', '(' => ' ', ')' => ' ',
+        '[' => ' ', ']' => ' ', '/' => ' ', '_' => ' ', '-' => ' ',
+    ]);
+    $texte = preg_replace('/\s+/u', ' ', $texte) ?? $texte;
+
+    $mots = [];
+    foreach (explode(' ', trim($texte)) as $mot) {
+        if ($mot === '') {
+            continue;
+        }
+        $mot = motAuMasculin($mot);
+        if (in_array($mot, MOTS_INCLUSIFS_SEULS, true)) {
+            continue;
+        }
+        $mots[] = $mot;
+    }
+    return implode(' ', $mots);
+}
+
+/** Ramène un mot à sa forme masculine de référence. L'ordre des règles compte (formes longues d'abord). */
+function motAuMasculin(string $mot): string
+{
+    $regles = [
+        'ienne' => 'ien',   // technicienne -> technicien
+        'trice' => 'teur',  // administratrice -> administrateur
+        'euse'  => 'eur',   // chercheuse -> chercheur
+        'esse'  => 'e',     // maitresse -> maitre
+        'ante'  => 'ant',   // enseignante, doctorante, etudiante
+        'ente'  => 'ent',   // presidente -> president
+        'eure'  => 'eur',   // ingenieure -> ingenieur
+        'iere'  => 'ier',   // infirmiere -> infirmier
+        'ive'   => 'if',    // applicative -> applicatif
+    ];
+    foreach ($regles as $feminin => $masculin) {
+        $longueur = mb_strlen($feminin);
+        if (mb_strlen($mot) > $longueur + 1 && mb_substr($mot, -$longueur) === $feminin) {
+            return mb_substr($mot, 0, -$longueur) . $masculin;
+        }
+    }
+    return $mot;
+}
+
+/**
+ * Statuts détenus par une personne, du plus récent au plus ancien.
+ * L'historique est la source de vérité ; à défaut (profil antérieur à la migration), le statut
+ * courant du profil est utilisé.
+ */
+function statutsDuPersonnel(PDO $pdo, int $personnelId): array
+{
+    $requete = $pdo->prepare(
+        'SELECT statut FROM personnel_statut_historique
+         WHERE personnel_id = :personnel
+         ORDER BY date_debut DESC, id DESC'
+    );
+    $requete->execute(['personnel' => $personnelId]);
+    $statuts = $requete->fetchAll(PDO::FETCH_COLUMN);
+
+    if (!$statuts) {
+        $requete = $pdo->prepare('SELECT statut FROM personnel WHERE id = :personnel');
+        $requete->execute(['personnel' => $personnelId]);
+        $statuts = array_filter([$requete->fetchColumn()]);
+    }
+    return array_values(array_unique(array_filter($statuts, 'is_string')));
+}
+
+/**
+ * Gabarits utilisables par une personne : ceux de son statut actuel, puis ceux de ses statuts
+ * antérieurs (marqués « retroactif »). Un gabarit d'un statut jamais détenu n'est pas proposé.
+ */
+function gabaritsDisponibles(PDO $pdo, int $personnelId, string $statutActuel): array
+{
+    $canoniques = array_map('normaliserStatut', array_merge(statutsDuPersonnel($pdo, $personnelId), [$statutActuel]));
+    $actuel = normaliserStatut($statutActuel);
+
+    $gabarits = [];
+    $requete = $pdo->query('SELECT id, code, libelle, statut_requis, description FROM gabarit ORDER BY libelle, code');
+    foreach ($requete as $gabarit) {
+        $canonique = normaliserStatut($gabarit['statut_requis']);
+        if (!in_array($canonique, $canoniques, true)) {
+            continue;
+        }
+        $gabarit['retroactif'] = $canonique !== $actuel;
+        $gabarits[] = $gabarit;
+    }
+
+    usort($gabarits, function (array $a, array $b): int {
+        return [$a['retroactif'], mb_strtolower($a['libelle'], 'UTF-8'), $a['code']]
+            <=> [$b['retroactif'], mb_strtolower($b['libelle'], 'UTF-8'), $b['code']];
+    });
+    return $gabarits;
+}
+
+/** Gabarit par code, ou null s'il n'existe pas. Sert à revérifier côté serveur le code reçu. */
+function gabaritParCode(PDO $pdo, string $code): ?array
+{
+    if ($code === '') {
+        return null;
+    }
+    $requete = $pdo->prepare('SELECT id, code, libelle, statut_requis, description FROM gabarit WHERE code = :code');
+    $requete->execute(['code' => $code]);
+    return $requete->fetch() ?: null;
+}

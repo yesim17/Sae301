@@ -190,5 +190,57 @@ test('refuse une date mal formée', function (): void {
     );
 });
 
+// ---------- Tâche 2 : statut et filtrage des gabarits ----------
+
+echo "\nTâche 2 - statut et filtrage des gabarits\n";
+
+test('normalise les variantes de genre d\'un statut', function (): void {
+    $reference = normaliserStatut('Maître de conférences');
+    egal($reference, normaliserStatut('Maîtresse de conférences'), 'maître / maîtresse');
+    egal($reference, normaliserStatut('MAÎTRESSE DE CONFÉRENCES'), 'casse et accents');
+    egal('enseignant chercheur', normaliserStatut('Enseignante-chercheuse'), 'enseignante-chercheuse');
+    egal('enseignant chercheur', normaliserStatut('Enseignant·e·s-chercheur·e·s'), 'écriture inclusive');
+    egal('doctorant', normaliserStatut('Doctorante'), 'doctorante');
+    egal('ingenieur systeme', normaliserStatut('Ingénieure système'), 'ingénieure système');
+    egal('administrateur applicatif', normaliserStatut('Administratrice applicative'), 'administratrice applicative');
+    egal('etudiant dev', normaliserStatut('Étudiant/Dev'), 'étudiant/dev');
+});
+
+test('charge dynamiquement les gabarits du statut courant', function (): void {
+    $gabarits = gabaritsDisponibles(baseDeTest(), 1, 'Maître de conférences');
+    egal(
+        ['ENS_COURS_MCF', 'ENS_COURS_MCF_F'],
+        array_column($gabarits, 'code'),
+        'gabarits de Jean (les deux variantes de genre du même statut)'
+    );
+    foreach ($gabarits as $gabarit) {
+        verifie($gabarit['retroactif'] === false, 'un gabarit courant est marqué rétroactif');
+    }
+});
+
+test('ne propose pas un gabarit d\'un statut jamais détenu', function (): void {
+    $codes = array_column(gabaritsDisponibles(baseDeTest(), 3, 'Enseignant-chercheur'), 'code');
+    egal(['ENS_RECH_PUBLI'], $codes, 'gabarits de Thomas');
+    verifie(!in_array('RECH_DOCTORAT', $codes, true), 'gabarit de doctorant proposé à un enseignant-chercheur');
+});
+
+test('accepte un gabarit saisi avec une autre variante de genre', function (): void {
+    $pdo = baseDeTest();
+    $pdo->exec("INSERT INTO gabarit (code, libelle, statut_requis) VALUES ('ENS_CHEUSE', 'Recherche', 'Enseignante-chercheuse')");
+    $codes = array_column(gabaritsDisponibles($pdo, 3, 'Enseignant-chercheur'), 'code');
+    verifie(in_array('ENS_CHEUSE', $codes, true), 'variante féminine non reconnue');
+});
+
+test('marque rétroactif le gabarit d\'un statut antérieur', function (): void {
+    $pdo = baseDeTest();
+    // Jean était doctorant jusqu'au 31/12/2025, puis maître de conférences.
+    $pdo->exec("UPDATE personnel_statut_historique SET date_fin = '2025-12-31' WHERE personnel_id = 1");
+    $pdo->exec("INSERT INTO personnel_statut_historique (personnel_id, statut, date_debut, date_fin) VALUES (1, 'Doctorant', '2024-09-01', '2025-12-31')");
+
+    $gabarits = gabaritsDisponibles($pdo, 1, 'Maître de conférences');
+    $retroactifs = array_column(array_filter($gabarits, fn (array $g): bool => $g['retroactif']), 'code');
+    egal(['RECH_DOCTORAT'], array_values($retroactifs), 'gabarits rétroactifs');
+});
+
 echo "\n" . ($GLOBALS['total'] - $GLOBALS['echecs']) . '/' . $GLOBALS['total'] . " tests réussis.\n";
 exit($GLOBALS['echecs'] === 0 ? 0 : 1);
