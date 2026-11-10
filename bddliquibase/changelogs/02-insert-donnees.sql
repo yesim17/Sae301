@@ -7,10 +7,20 @@ INSERT INTO structure (code, nom) VALUES
 ('DSI', 'Direction des Systèmes d''Information'),
 ('RH', 'Ressources Humaines');
 
+--liquibase formatted sql
+
+--changeset yessim17:ajout-nouvelles-activites
 INSERT INTO type_activite (code, libelle, description) VALUES 
-('ENS', 'Enseignement', 'Heures de cours, TD, TP'),
-('RECH', 'Recherche', 'Travaux de recherche et publications'),
-('ADM', 'Administration', 'Tâches administratives et gestion');
+('PROJ_RECH', 'Projet de recherche', 'Conception et contribution à un projet de recherche individuel ou collaboratif'),
+('CONF_INVITE', 'Conférence invitée', 'Participation à une conférence en tant qu''invité'),
+('PRES_SESSION', 'Présidence de session', 'Gestion et animation de session lors d''un congrès'),
+('RELECTURE_ART', 'Relecture d''article', 'Évaluation et relecture d''articles scientifiques'),
+('ORG_EVENT', 'Organisation d''événement scientifique', 'Organisation de colloques, séminaires ou congrès'),
+('GEST_PLAT','Gestion de plateforme', 'Gestion et maintenance de plateforme technique ou scientifique'),
+('COMITE_SELECT', 'Comité de sélection', 'Participation à un comité de sélection (recrutement)'),
+('EXP_DOSSIER', 'Expertise de dossier', 'Évaluation et analyse de dossiers administratifs ou académiques');
+
+--rollback DELETE FROM type_activite WHERE code IN ('PROJ_RECH', 'CONF_INVITE', 'PRES_SESSION', 'RELECTURE_ART', 'ORG_EVENT', 'GEST_PLAT', 'COMITE_SELECT', 'EXP_DOSSIER');
 
 INSERT INTO role (code, libelle) VALUES 
 ('ADMIN_FONCTIONNEL', 'Administrateur Fonctionnel'),
