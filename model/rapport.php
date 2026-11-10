@@ -240,3 +240,118 @@ function verifierCompatibiliteGabarit(
         'retroactif' => false,
     ];
 }
+
+// ---------- Export ----------
+
+/** Formats d'export proposés dans le formulaire. */
+const FORMATS_EXPORT = [
+    'pdf' => 'Document PDF',
+    'csv' => 'Fichier CSV',
+];
+
+/**
+ * Neutralise une cellule qui commencerait par un opérateur de formule : Excel l'interpréterait
+ * comme un calcul (injection CSV). Le texte reste lisible, précédé d'une apostrophe.
+ */
+function protegerCelluleCsv(string $valeur): string
+{
+    return preg_match('/^[=+\-@\t\r]/', $valeur) === 1 ? "'" . $valeur : $valeur;
+}
+
+/**
+ * Contenu CSV du rapport : UTF-8 avec BOM (Excel), séparateur « ; », échappement RFC 4180 assuré
+ * par fputcsv (guillemets doublés). Les activités reçues sont déjà filtrées (brouillons exclus).
+ */
+function contenuCsv(array $activites): string
+{
+    $flux = fopen('php://temp', 'r+');
+    if ($flux === false) {
+        throw new RuntimeException('Impossible de préparer le fichier CSV.');
+    }
+
+    fwrite($flux, "\xEF\xBB\xBF");
+    fputcsv($flux, ['Date', 'Titre', 'Type', 'Nature', 'Statut', 'Description'], ';', '"', '');
+    foreach ($activites as $activite) {
+        fputcsv($flux, [
+            protegerCelluleCsv((string) $activite['date_activite']),
+            protegerCelluleCsv((string) $activite['titre']),
+            protegerCelluleCsv((string) ($activite['type_libelle'] ?? '')),
+            $activite['est_collective'] ? 'Collective' : 'Individuelle',
+            protegerCelluleCsv(ucfirst((string) $activite['statut'])),
+            protegerCelluleCsv((string) ($activite['description'] ?? '')),
+        ], ';', '"', '');
+    }
+
+    rewind($flux);
+    $contenu = (string) stream_get_contents($flux);
+    fclose($flux);
+    return $contenu;
+}
+
+/**
+ * Contenu PDF du rapport, produit par Dompdf à partir du gabarit HTML views/Rapport/pdf.php.
+ * La librairie est installée par Composer (composer.json) ; son absence est signalée clairement.
+ */
+function contenuPdf(array $activites, array $contexte): string
+{
+    if (!class_exists(\Dompdf\Dompdf::class)) {
+        $autoload = __DIR__ . '/../vendor/autoload.php';
+        if (is_file($autoload)) {
+            require_once $autoload;
+        }
+    }
+    if (!class_exists(\Dompdf\Dompdf::class)) {
+        throw new RuntimeException('La librairie Dompdf est absente : lancez « composer install ».');
+    }
+
+    ob_start();
+    extract(['activites' => $activites, 'contexte' => $contexte], EXTR_SKIP);
+    require __DIR__ . '/../views/Rapport/pdf.php';
+    $html = (string) ob_get_clean();
+
+    $dompdf = new \Dompdf\Dompdf(['isRemoteEnabled' => false, 'defaultFont' => 'DejaVu Sans']);
+    $dompdf->loadHtml($html, 'UTF-8');
+    $dompdf->setPaper('A4', 'portrait');
+    $dompdf->render();
+    return (string) $dompdf->output();
+}
+
+/**
+ * Prépare le fichier à télécharger : type MIME, nom de fichier et contenu.
+ * $contexte contient le personnel, la période et le gabarit retenu (annexe liée au statut).
+ *
+ * Renvoie ['type_mime' => string, 'nom_fichier' => string, 'contenu' => string].
+ */
+function genererExport(array $activites, array $contexte, string $format): array
+{
+    if (!isset(FORMATS_EXPORT[$format])) {
+        throw new InvalidArgumentException("Format d'export inconnu.");
+    }
+
+    $nomBase = 'rapport_activites_' . $contexte['date_debut'] . '_' . $contexte['date_fin'];
+    if ($format === 'csv') {
+        return [
+            'type_mime' => 'text/csv; charset=UTF-8',
+            'nom_fichier' => $nomBase . '.csv',
+            'contenu' => contenuCsv($activites),
+        ];
+    }
+
+    return [
+        'type_mime' => 'application/pdf',
+        'nom_fichier' => $nomBase . '.pdf',
+        'contenu' => contenuPdf($activites, $contexte),
+    ];
+}
+
+/** En-têtes HTTP du téléchargement forcé, dans l'ordre attendu par le navigateur. */
+function entetesTelechargement(array $export): array
+{
+    return [
+        'Content-Type: ' . $export['type_mime'],
+        'Content-Disposition: attachment; filename="' . $export['nom_fichier'] . '"',
+        'Content-Length: ' . strlen($export['contenu']),
+        'Cache-Control: private, max-age=0, must-revalidate',
+        'Pragma: public',
+    ];
+}
