@@ -10,6 +10,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../config/helpers.php';
 require_once __DIR__ . '/../model/rapport.php';
+require_once __DIR__ . '/../model/personnel.php';
 
 $GLOBALS['total'] = 0;
 $GLOBALS['echecs'] = 0;
@@ -66,6 +67,8 @@ function baseDeTest(): PDO
     $pdo = new PDO('sqlite::memory:');
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
     $pdo->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
+    // SQLite ne connaît pas NOW() : on l'aliaste pour que le SQL du modèle reste inchangé.
+    $pdo->sqliteCreateFunction('NOW', fn () => date('Y-m-d H:i:s'));
 
     $pdo->exec(
         "CREATE TABLE personnel (
@@ -240,6 +243,95 @@ test('marque rétroactif le gabarit d\'un statut antérieur', function (): void 
     $gabarits = gabaritsDisponibles($pdo, 1, 'Maître de conférences');
     $retroactifs = array_column(array_filter($gabarits, fn (array $g): bool => $g['retroactif']), 'code');
     egal(['RECH_DOCTORAT'], array_values($retroactifs), 'gabarits rétroactifs');
+});
+
+// ---------- Tâche 3 : compatibilité des gabarits ----------
+
+echo "\nTâche 3 - compatibilité des gabarits\n";
+
+test('autorise le gabarit du statut actuel', function (): void {
+    $resultat = verifierCompatibiliteGabarit(baseDeTest(), 'ENS_COURS_MCF', 1, 'Maître de conférences');
+    egal(true, $resultat['autorise'], 'autorisation');
+    egal(false, $resultat['retroactif'], 'rétroactivité');
+});
+
+test('accepte le gabarit d\'une variante de genre du même statut', function (): void {
+    $resultat = verifierCompatibiliteGabarit(baseDeTest(), 'ENS_COURS_MCF', 2, 'Maîtresse de conférences');
+    egal(true, $resultat['autorise'], 'autorisation');
+    egal('Cours magistraux et TD', $resultat['gabarit']['libelle'] ?? null, 'gabarit retenu');
+});
+
+test('bloque un gabarit d\'un autre statut et fournit un message', function (): void {
+    $resultat = verifierCompatibiliteGabarit(
+        baseDeTest(),
+        'RECH_DOCTORAT',
+        1,
+        'Maître de conférences',
+        '2026-01-01',
+        '2026-06-30'
+    );
+    egal(false, $resultat['autorise'], 'autorisation');
+    verifie($resultat['message'] !== '', 'message d\'alerte absent');
+    egal(null, $resultat['gabarit'], 'gabarit renvoyé malgré le blocage');
+});
+
+test('bloque un code de gabarit inconnu', function (): void {
+    $resultat = verifierCompatibiliteGabarit(baseDeTest(), 'GABARIT_INEXISTANT', 1, 'Maître de conférences');
+    egal(false, $resultat['autorise'], 'autorisation');
+    egal(null, $resultat['gabarit'], 'gabarit');
+});
+
+test('autorise un gabarit rétroactif justifié par la période', function (): void {
+    $pdo = baseDeTest();
+    $pdo->exec("UPDATE personnel_statut_historique SET date_fin = '2025-12-31' WHERE personnel_id = 1");
+    $pdo->exec("INSERT INTO personnel_statut_historique (personnel_id, statut, date_debut, date_fin) VALUES (1, 'Doctorant', '2024-09-01', '2025-12-31')");
+
+    $resultat = verifierCompatibiliteGabarit($pdo, 'RECH_DOCTORAT', 1, 'Maître de conférences', '2025-01-01', '2025-12-31');
+    egal(true, $resultat['autorise'], 'autorisation');
+    egal(true, $resultat['retroactif'], 'rétroactivité');
+});
+
+test('bloque un gabarit rétroactif hors de la période du statut', function (): void {
+    $pdo = baseDeTest();
+    $pdo->exec("UPDATE personnel_statut_historique SET date_fin = '2025-12-31' WHERE personnel_id = 1");
+    $pdo->exec("INSERT INTO personnel_statut_historique (personnel_id, statut, date_debut, date_fin) VALUES (1, 'Doctorant', '2024-09-01', '2025-12-31')");
+
+    $resultat = verifierCompatibiliteGabarit($pdo, 'RECH_DOCTORAT', 1, 'Maître de conférences', '2026-01-01', '2026-06-30');
+    egal(false, $resultat['autorise'], 'autorisation');
+});
+
+test('historise le changement de statut du profil', function (): void {
+    $pdo = baseDeTest();
+    modifierPersonnel($pdo, 1, [
+        'nom' => 'Dupont',
+        'nom_usage' => '',
+        'prenom' => 'Jean',
+        'statut' => 'Professeur des universités',
+        'identifiant_scientifique' => 'JDUPONT2026',
+        'structure_id' => 0,
+    ], null);
+
+    $lignes = $pdo->query('SELECT statut, date_debut, date_fin FROM personnel_statut_historique WHERE personnel_id = 1 ORDER BY id')->fetchAll();
+    egal(2, count($lignes), 'nombre de périodes');
+    egal('Maître de conférences', $lignes[0]['statut'], 'ancien statut');
+    verifie($lignes[0]['date_fin'] !== null, 'ancienne période non clôturée');
+    egal('Professeur des universités', $lignes[1]['statut'], 'nouveau statut');
+    egal(null, $lignes[1]['date_fin'], 'nouvelle période ouverte');
+});
+
+test('n\'ouvre pas de période quand le statut ne change pas', function (): void {
+    $pdo = baseDeTest();
+    modifierPersonnel($pdo, 1, [
+        'nom' => 'Dupont',
+        'nom_usage' => '',
+        'prenom' => 'Jean',
+        'statut' => 'Maître de conférences',
+        'identifiant_scientifique' => 'JDUPONT2026',
+        'structure_id' => 0,
+    ], null);
+
+    $nombre = (int) $pdo->query('SELECT COUNT(*) FROM personnel_statut_historique WHERE personnel_id = 1')->fetchColumn();
+    egal(1, $nombre, 'périodes d\'historique');
 });
 
 echo "\n" . ($GLOBALS['total'] - $GLOBALS['echecs']) . '/' . $GLOBALS['total'] . " tests réussis.\n";

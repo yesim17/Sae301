@@ -120,6 +120,27 @@ function colonnesPersonnel(array $d): array
     ];
 }
 
+/**
+ * Ouvre une période de statut dans l'historique. Avec $changement, la période encore ouverte
+ * (statut actuel) est d'abord clôturée à la date du jour.
+ */
+function enregistrerStatut(PDO $pdo, int $personnelId, string $nouveauStatut, bool $changement = false): void
+{
+    if ($changement) {
+        $requete = $pdo->prepare(
+            'UPDATE personnel_statut_historique SET date_fin = CURRENT_DATE
+             WHERE personnel_id = :personnel AND date_fin IS NULL'
+        );
+        $requete->execute(['personnel' => $personnelId]);
+    }
+
+    $requete = $pdo->prepare(
+        'INSERT INTO personnel_statut_historique (personnel_id, statut, date_debut)
+         VALUES (:personnel, :statut, CURRENT_DATE)'
+    );
+    $requete->execute(['personnel' => $personnelId, 'statut' => $nouveauStatut]);
+}
+
 function creerPersonnel(PDO $pdo, array $d, array $roleIds): int
 {
     $pdo->beginTransaction();
@@ -135,6 +156,7 @@ function creerPersonnel(PDO $pdo, array $d, array $roleIds): int
 
     $requete->execute($colonnes);
     $id = (int) $requete->fetchColumn();
+    enregistrerStatut($pdo, $id, $colonnes['statut']);
 
     // Si aucun rôle n'a été coché, attribuer le rôle PERSONNEL par défaut
     if (empty($roleIds)) {
@@ -155,13 +177,26 @@ function creerPersonnel(PDO $pdo, array $d, array $roleIds): int
 function modifierPersonnel(PDO $pdo, int $id, array $d, ?array $roleIds): void
 {
     $pdo->beginTransaction();
+
+    $ancien = $pdo->prepare('SELECT statut FROM personnel WHERE id = :id');
+    $ancien->execute(['id' => $id]);
+    $statutPrecedent = (string) $ancien->fetchColumn();
+
+    $colonnes = colonnesPersonnel($d);
     $requete = $pdo->prepare(
         'UPDATE personnel
          SET nom = :nom, nom_usage = :nom_usage, prenom = :prenom, statut = :statut,
              identifiant_scientifique = :identifiant, structure_id = :structure, mis_a_jour_le = NOW()
          WHERE id = :id'
     );
-    $requete->execute(colonnesPersonnel($d) + ['id' => $id]);
+    $requete->execute($colonnes + ['id' => $id]);
+
+    // Un changement de statut clôt la période en cours : le gabarit de l'ancien statut reste
+    // choisissable pour une période rétroactive qu'il justifie.
+    if ($statutPrecedent !== '' && trim($statutPrecedent) !== $colonnes['statut']) {
+        enregistrerStatut($pdo, $id, $colonnes['statut'], true);
+    }
+
     if ($roleIds !== null) {
         remplacerRoles($pdo, $id, $roleIds);
     }

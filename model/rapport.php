@@ -169,3 +169,74 @@ function gabaritParCode(PDO $pdo, string $code): ?array
     $requete->execute(['code' => $code]);
     return $requete->fetch() ?: null;
 }
+
+/**
+ * Vrai si le statut demandé a été détenu pendant au moins un jour de la période.
+ * C'est cette justification qui autorise un gabarit rétroactif : une période entièrement postérieure
+ * au changement de statut ne le justifie pas.
+ */
+function statutJustifieSurPeriode(PDO $pdo, int $personnelId, string $statutRequis, string $dateDebut, string $dateFin): bool
+{
+    $canonique = normaliserStatut($statutRequis);
+    $requete = $pdo->prepare(
+        'SELECT statut FROM personnel_statut_historique
+         WHERE personnel_id = :personnel
+           AND date_debut <= :fin
+           AND (date_fin IS NULL OR date_fin >= :debut)'
+    );
+    $requete->execute(['personnel' => $personnelId, 'debut' => $dateDebut, 'fin' => $dateFin]);
+
+    foreach ($requete as $ligne) {
+        if (normaliserStatut($ligne['statut']) === $canonique) {
+            return true;
+        }
+    }
+    return false;
+}
+
+/**
+ * Contrôle la compatibilité entre un gabarit et le profil, côté serveur : le code reçu du formulaire
+ * n'est jamais cru sur parole.
+ *
+ * Renvoie ['autorise' => bool, 'message' => string, 'gabarit' => ?array, 'retroactif' => bool].
+ * Un gabarit d'un autre statut n'est accepté que si la période fournie justifie ce statut (rétroactif) ;
+ * sinon la génération doit être bloquée et le message affiché à l'utilisateur.
+ */
+function verifierCompatibiliteGabarit(
+    PDO $pdo,
+    string $gabaritCode,
+    int $personnelId,
+    string $statutActuel,
+    ?string $dateDebut = null,
+    ?string $dateFin = null
+): array {
+    $gabarit = gabaritParCode($pdo, $gabaritCode);
+    if ($gabarit === null) {
+        return [
+            'autorise' => false,
+            'message' => "Signal d'alerte : le gabarit demandé n'existe pas.",
+            'gabarit' => null,
+            'retroactif' => false,
+        ];
+    }
+
+    if (normaliserStatut($gabarit['statut_requis']) === normaliserStatut($statutActuel)) {
+        return ['autorise' => true, 'message' => '', 'gabarit' => $gabarit, 'retroactif' => false];
+    }
+
+    $periodeExploitable = $dateDebut !== null && $dateFin !== null
+        && dateValide($dateDebut) && dateValide($dateFin) && $dateDebut <= $dateFin;
+
+    if ($periodeExploitable && statutJustifieSurPeriode($pdo, $personnelId, $gabarit['statut_requis'], $dateDebut, $dateFin)) {
+        return ['autorise' => true, 'message' => '', 'gabarit' => $gabarit, 'retroactif' => true];
+    }
+
+    return [
+        'autorise' => false,
+        'message' => "Signal d'alerte : le gabarit « " . $gabarit['libelle'] . " » est réservé au statut « "
+            . $gabarit['statut_requis'] . ' » : il ne correspond ni à votre statut actuel (' . $statutActuel
+            . ') ni à la période choisie.',
+        'gabarit' => null,
+        'retroactif' => false,
+    ];
+}
