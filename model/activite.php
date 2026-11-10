@@ -26,6 +26,39 @@ const CHAMPS_PAR_TYPE = [
     'ADM' => [
         'mission' => ['libelle' => 'Mission ou instance', 'format' => 'texte', 'obligatoire' => true],
     ],
+
+    // Nouveaux types d'activités
+    'PROJ_RECH' => [
+        'intitule_projet' => ['libelle' => 'Intitulé du projet', 'format' => 'texte', 'obligatoire' => true],
+        'volume_horaire'  => ['libelle' => 'Volume horaire estimé (heures)', 'format' => 'nombre', 'obligatoire' => false],
+    ],
+    'CONF_INVITE' => [
+        'nom_conference' => ['libelle' => 'Nom de la conférence', 'format' => 'texte', 'obligatoire' => true],
+        'lieu'           => ['libelle' => 'Lieu / Ville', 'format' => 'texte', 'obligatoire' => true],
+    ],
+    'PRES_SESSION' => [
+        'nom_congres' => ['libelle' => 'Nom du congrès ou de l`événement', 'format' => 'texte', 'obligatoire' => true],
+        'intitule_session' => ['libelle' => 'Intitulé de la session présidée', 'format' => 'texte', 'obligatoire' => false],
+    ],
+    'RELECTURE_ART' => [
+        'nom_revue' => ['libelle' => 'Nom de la revue ou de la conférence', 'format' => 'texte', 'obligatoire' => true],
+        'nombre_papiers' => ['libelle' => 'Nombre d`articles relus', 'format' => 'nombre', 'obligatoire' => false],
+    ],
+    'ORG_EVENT' => [
+        'nom_evenement' => ['libelle' => 'Nom de l`événement', 'format' => 'texte', 'obligatoire' => true]
+    ],
+    'GEST_PLAT' => [
+        'nom_plateforme' => ['libelle' => 'Nom de la plateforme', 'format' => 'texte', 'obligatoire' => true],
+        'volume_horaire' => ['libelle' => 'Volume horaire de gestion', 'format' => 'nombre', 'obligatoire' => false],
+    ],
+    'COMITE_SELECT' => [
+        'intitule_poste' => ['libelle' => 'Intitulé du poste / Concours', 'format' => 'texte', 'obligatoire' => true],
+        'etablissement'  => ['libelle' => 'Établissement concerné', 'format' => 'texte', 'obligatoire' => false],
+    ],
+    'EXP_DOSSIER' => [
+        'type_dossier' => ['libelle' => 'Type de dossier évalué', 'format' => 'texte', 'obligatoire' => true],
+        'reference'    => ['libelle' => 'Référence ou organisme mandataire', 'format' => 'texte', 'obligatoire' => false],
+    ],
 ];
 
 /** Colonnes autorisées pour le tri (liste blanche : ces valeurs vont directement dans le SQL). */
@@ -156,24 +189,30 @@ function trouverActiviteVisible(PDO $pdo, int $id, int $moi, ?int $structure): ?
 /**
  * Bilan d'équipe : activités collectives de la structure de la personne, ou auxquelles elle est liée.
  * Contrairement au dossier personnel, les participations en attente y figurent.
- */
-function bilanEquipe(PDO $pdo, int $moi, ?int $structure): array
+ */function bilanEquipe(PDO $pdo, int $personnelId, ?int $structureId = null): array
 {
     $requete = $pdo->prepare(
-        "SELECT a.id, a.titre, a.date_activite, a.statut,
-                t.libelle AS type_libelle, d.prenom, d.nom, d.nom_usage
+        "SELECT DISTINCT a.*,
+                t.libelle AS type_libelle,
+                s.nom AS structure_nom,
+                p.nom,
+                p.nom_usage,
+                p.prenom,
+                p.identifiant_scientifique,
+                p.nom AS declarant_nom,
+                p.nom_usage AS declarant_nom_usage,
+                p.prenom AS declarant_prenom,
+                p.identifiant_scientifique AS declarant_identifiant
          FROM activite a
          LEFT JOIN type_activite t ON t.id = a.type_activite_id
-         LEFT JOIN personnel d ON d.id = a.personnel_id
-         WHERE a.est_collective AND (
-             a.structure_id = :structure
-             OR a.personnel_id = :moi1
-             OR EXISTS (SELECT 1 FROM activite_participant ap
-                        WHERE ap.activite_id = a.id AND ap.personnel_id = :moi2)
-         )
+         LEFT JOIN structure s ON s.id = a.structure_id
+         JOIN personnel p ON p.id = a.personnel_id
+         LEFT JOIN activite_participant ap ON ap.activite_id = a.id
+         WHERE a.est_collective = TRUE
+           AND (a.personnel_id = :personnel_id OR ap.personnel_id = :personnel_id)
          ORDER BY a.date_activite DESC, a.id DESC"
     );
-    $requete->execute(['structure' => $structure, 'moi1' => $moi, 'moi2' => $moi]);
+    $requete->execute(['personnel_id' => $personnelId]);
     return $requete->fetchAll();
 }
 

@@ -5,4 +5,4 @@
 define('DB_HOST', 'localhost');
 define('DB_NAME', 'postgres');
 define('DB_USER', 'postgres');
-define('DB_PASS', 'Muxif575'); // À modifier avec ton vrai mot de passe
+define('DB_PASS', 'grGIJ7Pk'); // À modifier avec ton vrai mot de passe

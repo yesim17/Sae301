@@ -1,15 +1,23 @@
 <section class="carte connexion">
     <h1>Connexion</h1>
-    <p class="aide">Mode développement : la base ne contient pas encore de mots de passe.</p>
     <form method="post" action="<?= e(lien('connexion')) ?>">
         <?= champCsrf() ?>
-        <label for="personnel_id">Profil</label>
-        <select id="personnel_id" name="personnel_id" required>
-            <option value="">Choisir un profil</option>
-            <?php foreach ($personnels as $personnel): ?>
-                <option value="<?= (int) $personnel['id'] ?>"><?= e(libellePersonnel($personnel)) ?></option>
-            <?php endforeach; ?>
-        </select>
-        <button type="submit" class="bouton">Se connecter</button>
+
+        <?php if (!empty($erreur)): ?>
+            <div class="text-danger mb-3"><?= e($erreur) ?></div>
+        <?php endif; ?>
+
+        <div class="form-group mb-3">
+            <label for="identifiant">Identifiant scientifique ou email</label>
+            <input type="text" id="identifiant" name="identifiant" class="form-control" required 
+                   value="<?= htmlspecialchars($valeurs['identifiant'] ?? '') ?>">
+        </div>
+
+        <div class="form-group mb-3">
+            <label for="password">Mot de passe :*</label>
+            <input type="password" id="password" name="password" class="form-control" required>
+        </div>
+
+        <button type="submit" class="bouton btn btn-primary">Se connecter</button>
     </form>
 </section>

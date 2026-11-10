@@ -14,7 +14,12 @@
     </div>
     <div class="champ">
         <label for="participant-<?= e($index) ?>-role">Rôle <span class="requis">*</span></label>
-        <input type="text" id="participant-<?= e($index) ?>-role" name="participants[<?= e($index) ?>][role]" maxlength="100" value="<?= e($ligne['role']) ?>" placeholder="Ex. : co-auteur, animateur">
+        <select id="participant-<?= e($index) ?>-role" name="participants[<?= e($index) ?>][role]">
+            <option value="">Choisir un rôle</option>
+            <?php foreach ($roles as $codeRole => $libelleRole): ?>
+                <option value="<?= e($codeRole) ?>"<?= ($ligne['role'] ?? '') === $codeRole ? ' selected' : '' ?>><?= e($libelleRole) ?></option>
+            <?php endforeach; ?>
+        </select>
     </div>
     <button type="button" class="bouton bouton-secondaire retirer-ligne">Retirer</button>
     <?php if ($erreurLigne !== ''): ?>
