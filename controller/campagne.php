@@ -84,6 +84,7 @@ function pageCampagnes(PDO $pdo): void
     ]);
 }
 
+
 function cloturerCampagne(PDO $pdo): void
 {
     exigerPost();

@@ -43,6 +43,7 @@ function verifierChevauchementCampagne($pdo, $nature, $date_debut, $date_fin) {
     return $stmt->fetchColumn() > 0;
 }
 
+
 /** Clôture une campagne avant terme (elle n'enverra plus de rappel). Renvoie false si elle est introuvable ou déjà clôturée. */
 function fermerCampagne(PDO $pdo, int $id): bool
 {

@@ -110,5 +110,6 @@
                 </tbody>
             </table>
         </div>
+
     <?php endif; ?>
 </section>
