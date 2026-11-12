@@ -30,6 +30,7 @@ function listerCampagnes(PDO $pdo): array
 function verifierChevauchementCampagne($pdo, $nature, $date_debut, $date_fin) {
     $sql = "SELECT COUNT(*) FROM campagne 
             WHERE nature = :nature 
+            AND est_actif = TRUE
             AND date_debut <= :date_fin 
             AND date_fin >= :date_debut";
 
@@ -42,7 +43,6 @@ function verifierChevauchementCampagne($pdo, $nature, $date_debut, $date_fin) {
 
     return $stmt->fetchColumn() > 0;
 }
-
 
 /** Clôture une campagne avant terme (elle n'enverra plus de rappel). Renvoie false si elle est introuvable ou déjà clôturée. */
 function fermerCampagne(PDO $pdo, int $id): bool
