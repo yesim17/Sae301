@@ -12,7 +12,7 @@ function validerCampagne(array $v, PDO $pdo): array
     } elseif (tropLong($v['titre'], 255)) {
         $erreurs['titre'] = "Le titre saisi est trop long. Il doit contenir au maximum 255 caractères.";
     }
-    
+
     // Erreurs sur la période et la nature
     if ($v['periode_reference'] === '') {
         $erreurs['periode_reference'] = "Veuillez indiquer une période de référence (par exemple : '2026-2027' ou 'S1').";
@@ -20,7 +20,7 @@ function validerCampagne(array $v, PDO $pdo): array
     if ($v['nature'] === '') {
         $erreurs['nature'] = "Veuillez sélectionner la nature de la campagne dans la liste déroulante.";
     }
-    
+
     // Erreurs d'oubli sur les dates
     if (!dateValide($v['date_debut'])) {
         $erreurs['date_debut'] = "La date d'ouverture de la campagne doit obligatoirement être renseignée.";
@@ -28,7 +28,7 @@ function validerCampagne(array $v, PDO $pdo): array
     if (!dateValide($v['date_fin'])) {
         $erreurs['date_fin'] = "La date de clôture de la campagne doit obligatoirement être renseignée.";
     }
-    
+
     // Règle US : La clôture antérieure à l'ouverture est refusée
     if (!isset($erreurs['date_debut']) && !isset($erreurs['date_fin']) && $v['date_fin'] < $v['date_debut']) {
         $erreurs['date_fin'] = "Erreur de paramétrage : la date de clôture de la campagne doit être postérieure ou égale à sa date d'ouverture.";
@@ -55,7 +55,7 @@ function pageCampagnes(PDO $pdo): void
             'date_debut' => post('date_debut'),
             'date_fin' => post('date_fin'),
         ];
-        
+
         $erreurs = validerCampagne($valeurs, $pdo);
 
         if (!$erreurs) {
@@ -82,4 +82,15 @@ function pageCampagnes(PDO $pdo): void
         'erreurs' => $erreurs,
         'campagnes' => listerCampagnes($pdo),
     ]);
+}
+
+function cloturerCampagne(PDO $pdo): void
+{
+    exigerPost();
+    if (fermerCampagne($pdo, idDepuis(post('campagne_id')))) {
+        flash('succes', 'La campagne a été clôturée.');
+    } else {
+        flash('erreur', 'Cette campagne est introuvable ou déjà clôturée.');
+    }
+    rediriger('campagnes');
 }
